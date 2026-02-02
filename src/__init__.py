@@ -19,7 +19,7 @@ import sys
 import os
 import logging
 
-# Package version
+# Версия пакета
 __version__ = "5.0.0"
 __author__ = "ML Volatility Team"
 __email__ = "example@example.com"
@@ -91,9 +91,9 @@ except ImportError as e:
     logger.error(f"❌ Import error: {e}")
     logger.warning("⚠️ Some components may not be available")
 
-# Export main classes
+# Экспорт основных классов
 __all__ = [
-    # Version
+    # Версия
     "__version__",
     "__author__", 
     "__email__",
@@ -140,7 +140,7 @@ __all__ = [
 ]
 
 def get_package_info() -> Dict[str, Any]:
-    """Get package information"""
+    """Получить информацию о пакете"""
     return {
         "name": "ml-volatility-forecasting",
         "version": __version__,
@@ -161,7 +161,7 @@ def get_package_info() -> Dict[str, Any]:
     }
 
 def check_dependencies() -> Dict[str, bool]:
-    """Check availability of core dependencies"""
+    """Проверить доступность основных зависимостей"""
     dependencies = {
         "arch": False,
         "pandas": False,
@@ -190,7 +190,7 @@ def check_dependencies() -> Dict[str, bool]:
     
     return dependencies
 
-# Check dependencies on import
+# Проверка зависимостей при импорте
 if __name__ != "__main__":
     deps = check_dependencies()
     missing_critical = [dep for dep, available in deps.items() 
@@ -204,13 +204,13 @@ def create_volatility_forecasting_system(
     config: Optional[Dict[str, Any]] = None
 ) -> "VolatilityForecastingSystem":
     """
-    Create a complete volatility forecasting system
+    Создать полную систему прогнозирования волатильности
     
     Args:
-        config: System configuration
+        config: Конфигурация системы
         
     Returns:
-        VolatilityForecastingSystem: Configured system
+        VolatilityForecastingSystem: Настроенная система
     """
     from .core.volatility_system import VolatilityForecastingSystem
     
