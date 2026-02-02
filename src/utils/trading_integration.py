@@ -1,14 +1,14 @@
 """
-Trading Integration Utilities для Volatility-Based Trading
+Trading Integration Utilities for Volatility-Based Trading
 
-Реализация comprehensive trading utilities для integration volatility forecasts:
-- Position sizing на основе волатильности
+Implementation of comprehensive trading utilities for integrating volatility forecasts:
+- Volatility-based position sizing
 - Dynamic stop-loss adjustment
 - Options strategies recommendations
 - Portfolio volatility optimization (risk parity)
 - Volatility breakout strategies
-- Pairs trading на основе correlation analysis
-- Kelly criterion для optimal position sizing
+- Pairs trading based on correlation analysis
+- Kelly criterion for optimal position sizing
 
 Features:
 - Real-time position adjustment
@@ -36,12 +36,12 @@ from sklearn.covariance import LedoitWolf
 from numba import jit
 import warnings
 
-# Настройка логирования
+# Logging configuration
 logger = logging.getLogger(__name__)
 warnings.filterwarnings('ignore', category=RuntimeWarning)
 
 class PositionSizeMethod(Enum):
-    """Методы расчета размера позиции"""
+    """Position sizing methods"""
     FIXED_AMOUNT = "fixed_amount"
     VOLATILITY_TARGET = "volatility_target"
     KELLY_CRITERION = "kelly_criterion"
@@ -50,7 +50,7 @@ class PositionSizeMethod(Enum):
     RISK_PARITY = "risk_parity"
 
 class PortfolioOptimizationMethod(Enum):
-    """Методы портфельной оптимизации"""
+    """Portfolio optimization methods"""
     MEAN_VARIANCE = "mean_variance"
     RISK_PARITY = "risk_parity"
     MINIMUM_VARIANCE = "minimum_variance"
@@ -59,7 +59,7 @@ class PortfolioOptimizationMethod(Enum):
     HIERARCHICAL_RISK_PARITY = "hrp"
 
 class OptionStrategy(Enum):
-    """Опционные стратегии"""
+    """Option strategies"""
     LONG_STRADDLE = "long_straddle"
     SHORT_STRADDLE = "short_straddle"
     LONG_STRANGLE = "long_strangle"
@@ -69,7 +69,7 @@ class OptionStrategy(Enum):
 
 @dataclass
 class PositionSizeRecommendation:
-    """Рекомендация по размеру позиции"""
+    """Position size recommendation"""
     symbol: str
     timestamp: datetime
     
@@ -89,7 +89,7 @@ class PositionSizeRecommendation:
     take_profit_level: Optional[float] = None
     max_drawdown_limit: float = 0.05  # 5%
     
-    # Confidence и adjustments
+    # Confidence and adjustments
     confidence_score: float = 0.8
     volatility_adjustment_factor: float = 1.0
     market_regime_adjustment: float = 1.0
@@ -103,7 +103,7 @@ class PositionSizeRecommendation:
 
 @dataclass
 class DynamicStopLossRecommendation:
-    """Рекомендация по динамическому стоп-лоссу"""
+    """Dynamic stop-loss recommendation"""
     symbol: str
     timestamp: datetime
     entry_price: float
@@ -133,7 +133,7 @@ class DynamicStopLossRecommendation:
 
 @dataclass
 class PortfolioOptimizationResult:
-    """Результат портфельной оптимизации"""
+    """Portfolio optimization result"""
     optimization_method: PortfolioOptimizationMethod
     timestamp: datetime
     
@@ -165,7 +165,7 @@ class PortfolioOptimizationResult:
 
 @dataclass
 class OptionStrategyRecommendation:
-    """Рекомендация опционной стратегии"""
+    """Option strategy recommendation"""
     symbol: str
     timestamp: datetime
     strategy: OptionStrategy
@@ -243,8 +243,8 @@ class PositionSizer:
     """
     Volatility-Based Position Sizing Engine
     
-    Динамический расчет размеров позиций на основе:
-    - Прогнозируемой волатильности
+    Dynamic position sizing based on:
+    - Forecasted volatility
     - Kelly criterion
     - VaR constraints
     - Risk parity principles
@@ -447,7 +447,7 @@ class PositionSizer:
     async def _calculate_regime_adjustment(self, volatility: float) -> float:
         """Calculate market regime adjustment factor"""
         
-        # Простая классификация режимов
+        # Simple regime classification
         if volatility < 0.1:  # Low volatility
             return 1.2  # Increase position size
         elif volatility < 0.2:  # Normal volatility
@@ -480,13 +480,13 @@ class PositionSizer:
 
 class DynamicStopLoss:
     """
-    Dynamic Stop-Loss Management с Volatility Adjustment
-    
-    Адаптивные стоп-лоссы на основе:
-    - Текущей волатильности
+    Dynamic Stop-Loss Management with Volatility Adjustment
+
+    Adaptive stop-losses based on:
+    - Current volatility
     - ATR (Average True Range)
     - Bollinger Bands
-    - Trailing stops с volatility scaling
+    - Trailing stops with volatility scaling
     """
     
     def __init__(self, default_stop_multiplier: float = 2.0):
@@ -619,7 +619,7 @@ class DynamicStopLoss:
     ) -> float:
         """Calculate ATR-based stop distance"""
         
-        # Simple ATR calculation (simplified - в production нужен OHLC)
+        # Simple ATR calculation (simplified - in production needs OHLC)
         returns = price_history.pct_change().dropna()
         atr = returns.abs().rolling(atr_period).mean().iloc[-1]
         
@@ -718,14 +718,14 @@ class DynamicStopLoss:
 
 class PortfolioOptimizer:
     """
-    Portfolio Optimization с Volatility Forecasts
-    
-    Современная портфельная оптимизация:
-    - Mean-Variance Optimization с shrinkage
+    Portfolio Optimization with Volatility Forecasts
+
+    Modern portfolio optimization:
+    - Mean-Variance Optimization with shrinkage
     - Risk Parity
-    - Black-Litterman с volatility views
+    - Black-Litterman with volatility views
     - Hierarchical Risk Parity
-    - Maximum Sharpe с volatility constraints
+    - Maximum Sharpe with volatility constraints
     """
     
     def __init__(self, risk_free_rate: float = 0.02):
@@ -967,9 +967,9 @@ class PortfolioOptimizer:
         
         n_assets = len(covariance_matrix)
         
-        # Use Ledoit-Wolf shrinkage для covariance
+        # Use Ledoit-Wolf shrinkage for covariance
         shrinkage_estimator = LedoitWolf()
-        # Note: в реальном применении нужны historical returns для shrinkage
+        # Note: in real application, historical returns are needed for shrinkage
         
         # For now, use regularized covariance
         regularized_cov = covariance_matrix + np.eye(n_assets) * 1e-6
@@ -1098,13 +1098,13 @@ class PortfolioOptimizer:
 
 class OptionStrategyRecommender:
     """
-    Options Strategy Recommender на основе Volatility Forecasts
-    
-    Рекомендации опционных стратегий:
-    - Long/Short Straddles для volatility plays
-    - Iron Condors для range-bound markets
-    - Butterfly spreads для precise volatility bets
-    - Strangles для asymmetric volatility
+    Options Strategy Recommender based on Volatility Forecasts
+
+    Option strategy recommendations:
+    - Long/Short Straddles for volatility plays
+    - Iron Condors for range-bound markets
+    - Butterfly spreads for precise volatility bets
+    - Strangles for asymmetric volatility
     """
     
     def __init__(self):
@@ -1130,7 +1130,7 @@ class OptionStrategyRecommender:
             current_price: Current underlying price
             volatility_forecast: Forecasted volatility
             current_implied_vol: Current implied volatility
-            market_outlook: Direction bias и confidence
+            market_outlook: Direction bias and confidence
             expiry_days: Days to expiry
         """
         try:
@@ -1282,7 +1282,7 @@ class OptionStrategyRecommender:
     ) -> Dict[str, Any]:
         """Calculate risk-reward profile (simplified)"""
         
-        # Mock option pricing (в production использовать Black-Scholes или real prices)
+        # Mock option pricing (in production use Black-Scholes or real prices)
         time_to_expiry = days_to_expiry / 365.0
         
         risk_reward = {
@@ -1294,7 +1294,7 @@ class OptionStrategyRecommender:
         }
         
         if strategy == OptionStrategy.LONG_STRADDLE:
-            # Estimate premium для ATM straddle
+            # Estimate premium for ATM straddle
             option_premium = underlying_price * volatility * np.sqrt(time_to_expiry) * 0.4
             risk_reward["premium_estimate"] = option_premium * 2  # Call + Put
             risk_reward["max_loss"] = risk_reward["premium_estimate"]
@@ -1361,7 +1361,7 @@ class OptionStrategyRecommender:
         
         return greeks
 
-# Export всех классов
+# Export all classes
 __all__ = [
     "PositionSizeMethod",
     "PortfolioOptimizationMethod", 

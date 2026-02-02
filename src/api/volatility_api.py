@@ -1,12 +1,12 @@
 """
-FastAPI REST API для Volatility Forecasting Services
+FastAPI REST API for Volatility Forecasting Services
 
-Реализация production-ready API endpoints для volatility forecasting:
+Implementation of production-ready API endpoints for volatility forecasting:
 - Real-time volatility forecasting
 - Historical volatility analysis
 - Risk metrics calculation
-- Model comparison и validation
-- WebSocket streaming для real-time updates
+- Model comparison and validation
+- WebSocket streaming for real-time updates
 - Comprehensive error handling
 - Authentication & rate limiting
 - OpenAPI documentation
@@ -59,7 +59,7 @@ from ..utils.risk_metrics import (
 )
 from ..validation.volatility_validator import VolatilityValidator, VaRBacktester
 
-# Настройка логирования
+# Logging configuration
 logger = logging.getLogger(__name__)
 
 # Security
@@ -75,10 +75,10 @@ class AppState:
         
 app_state = AppState()
 
-# Pydantic Models для API
+# Pydantic Models for API
 
 class VolatilityForecastRequest(BaseModel):
-    """Request для volatility forecasting"""
+    """Request for volatility forecasting"""
     symbol: str = Field(..., description="Trading symbol (e.g., BTCUSDT)")
     model_type: str = Field("auto", description="Model type: auto, garch, lstm, har-rv, ensemble")
     horizon: int = Field(1, ge=1, le=30, description="Forecast horizon in periods")
@@ -93,7 +93,7 @@ class VolatilityForecastRequest(BaseModel):
         return v
 
 class VolatilityAnalysisRequest(BaseModel):
-    """Request для volatility analysis"""
+    """Request for volatility analysis"""
     symbol: str = Field(..., description="Trading symbol")
     start_date: Optional[datetime] = Field(None, description="Analysis start date")
     end_date: Optional[datetime] = Field(None, description="Analysis end date")
@@ -101,7 +101,7 @@ class VolatilityAnalysisRequest(BaseModel):
     include_risk_metrics: bool = Field(True, description="Include risk metrics calculation")
 
 class RiskMetricsRequest(BaseModel):
-    """Request для risk metrics calculation"""
+    """Request for risk metrics calculation"""
     symbol: str = Field(..., description="Trading symbol")
     confidence_levels: List[float] = Field([0.95, 0.99], description="VaR confidence levels")
     var_methods: List[str] = Field(["historical", "parametric"], description="VaR calculation methods")
@@ -109,7 +109,7 @@ class RiskMetricsRequest(BaseModel):
     include_volatility_cone: bool = Field(True, description="Include volatility cone")
 
 class ModelValidationRequest(BaseModel):
-    """Request для model validation"""
+    """Request for model validation"""
     symbol: str = Field(..., description="Trading symbol")
     models: List[str] = Field(..., description="Models to validate")
     validation_method: str = Field("out_of_sample", description="Validation method")
@@ -118,7 +118,7 @@ class ModelValidationRequest(BaseModel):
 # Response Models
 
 class VolatilityForecastResponse(BaseModel):
-    """Response для volatility forecasting"""
+    """Response for volatility forecasting"""
     symbol: str
     timestamp: datetime
     model_name: str
@@ -154,7 +154,7 @@ async def lifespan(app: FastAPI):
         logger.warning(f"⚠️ Redis connection failed: {e}")
         app_state.redis_client = None
     
-    # Pre-load default models для популярных symbols
+    # Pre-load default models for popular symbols
     await load_default_models()
     
     logger.info("✅ Volatility Forecasting API started")
@@ -183,7 +183,7 @@ app = FastAPI(
 # CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # В production ограничить
+    allow_origins=["*"],  # Restrict in production
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -197,7 +197,7 @@ async def get_redis() -> Optional[redis.Redis]:
 
 async def verify_auth(credentials: HTTPAuthorizationCredentials = Depends(security)) -> str:
     """Verify API authentication"""
-    # В production здесь будет proper JWT validation
+    # In production this would use proper JWT validation
     token = credentials.credentials
     if not token or token == "invalid":
         raise HTTPException(status_code=401, detail="Invalid authentication token")
@@ -216,7 +216,7 @@ async def get_rate_limit(symbol: str = Query(...)) -> None:
 # Utility functions
 
 async def load_default_models():
-    """Load default models для популярных symbols"""
+    """Load default models for popular symbols"""
     default_symbols = ["BTCUSDT", "ETHUSDT", "BNBUSDT"]
     
     for symbol in default_symbols:
@@ -260,7 +260,7 @@ async def get_or_create_model(symbol: str, model_type: str) -> Any:
     return app_state.models[symbol][model_type]
 
 async def cache_result(key: str, data: Any, ttl: int = 300) -> None:
-    """Cache result в Redis"""
+    """Cache result in Redis"""
     if app_state.redis_client:
         try:
             serialized = json.dumps(data, default=str)
@@ -293,7 +293,7 @@ async def health_check():
     return HealthCheckResponse(
         timestamp=datetime.now(),
         services=services,
-        uptime="running",  # В production - actual uptime
+        uptime="running",  # In production - actual uptime
         models_loaded=len(app_state.models)
     )
 
@@ -307,8 +307,8 @@ async def forecast_volatility(
     """
     Generate volatility forecast
     
-    Создает прогноз волатильности используя выбранную модель или автоматический выбор.
-    Поддерживает multiple models с confidence intervals.
+    Creates volatility forecast using the selected model or automatic selection.
+    Supports multiple models with confidence intervals.
     """
     try:
         logger.info(f"🔄 Forecasting volatility for {request.symbol} using {request.model_type}")
@@ -320,7 +320,7 @@ async def forecast_volatility(
             logger.info("✅ Returning cached forecast")
             return VolatilityForecastResponse(**cached_result)
         
-        # Get sample data (в production - from data service)
+        # Get sample data (in production - from data service)
         sample_returns = await generate_sample_data(request.symbol)
         
         if request.model_type == "auto":
@@ -362,7 +362,7 @@ async def forecast_volatility(
             "feature_importance": forecast_result.feature_importance if request.return_features else None,
             "metadata": {
                 "model_version": getattr(forecast_result, 'model_version', "1.0"),
-                "calculation_time": "instant",  # В production - actual time
+                "calculation_time": "instant",  # In production - actual time
                 "data_quality": "high"
             }
         }
@@ -389,8 +389,8 @@ async def analyze_volatility(
     """
     Comprehensive volatility analysis
     
-    Анализ реализованной волатильности using multiple estimators.
-    Включает jump detection, microstructure noise analysis, и intraday patterns.
+    Realized volatility analysis using multiple estimators.
+    Includes jump detection, microstructure noise analysis, and intraday patterns.
     """
     try:
         logger.info(f"🔄 Analyzing volatility for {request.symbol}")
@@ -457,8 +457,8 @@ async def calculate_risk_metrics(
     """
     Calculate comprehensive risk metrics
     
-    Расчет VaR, CVaR, maximum drawdown, volatility cones и других risk metrics.
-    Поддерживает multiple methods и confidence levels.
+    Calculates VaR, CVaR, maximum drawdown, volatility cones, and other risk metrics.
+    Supports multiple methods and confidence levels.
     """
     try:
         logger.info(f"🔄 Calculating risk metrics for {request.symbol}")
@@ -536,8 +536,8 @@ async def validate_models(
     """
     Validate and compare volatility models
     
-    Comprehensive model validation с statistical tests, backtesting,
-    и model confidence set analysis.
+    Comprehensive model validation with statistical tests, backtesting,
+    and model confidence set analysis.
     """
     try:
         logger.info(f"🔄 Validating models for {request.symbol}")
@@ -624,9 +624,9 @@ async def validate_models(
 @app.websocket("/ws/volatility/{symbol}")
 async def volatility_websocket(websocket: WebSocket, symbol: str):
     """
-    WebSocket для real-time volatility updates
+    WebSocket for real-time volatility updates
     
-    Streams real-time volatility forecasts и risk metrics updates.
+    Streams real-time volatility forecasts and risk metrics updates.
     """
     await websocket.accept()
     
@@ -661,7 +661,7 @@ async def volatility_websocket(websocket: WebSocket, symbol: str):
             app_state.active_websockets[symbol].remove(websocket)
 
 async def broadcast_update(symbol: str, update_type: str, data: Any):
-    """Broadcast update to all WebSocket connections для symbol"""
+    """Broadcast update to all WebSocket connections for symbol"""
     if symbol not in app_state.active_websockets:
         return
     
@@ -685,10 +685,10 @@ async def broadcast_update(symbol: str, update_type: str, data: Any):
     
     app_state.active_websockets[symbol] = active_websockets
 
-# Utility/Mock functions (в production заменить на real data sources)
+# Utility/Mock functions (in production replace with real data sources)
 
 async def generate_sample_data(symbol: str, n_points: int = 252) -> pd.Series:
-    """Generate sample return data для testing"""
+    """Generate sample return data for testing"""
     np.random.seed(42)  # For reproducibility
     returns = np.random.normal(0.001, 0.02, n_points)  # Daily returns
     dates = pd.date_range(start=datetime.now() - timedelta(days=n_points), periods=n_points, freq='D')
@@ -829,7 +829,7 @@ async def get_models_status(token: str = Depends(verify_auth)):
         "timestamp": datetime.now(),
         "total_symbols": len(app_state.models),
         "models_status": status,
-        "memory_usage": "N/A",  # В production - actual memory usage
+        "memory_usage": "N/A",  # In production - actual memory usage
         "active_websockets": sum(len(sockets) for sockets in app_state.active_websockets.values())
     }
 
@@ -839,7 +839,7 @@ async def retrain_model(
     model_type: str = Query(..., description="Model type to retrain"),
     token: str = Depends(verify_auth)
 ):
-    """Retrain specific model для symbol"""
+    """Retrain specific model for symbol"""
     try:
         logger.info(f"🔄 Retraining {model_type} model for {symbol}")
         
@@ -870,9 +870,9 @@ async def retrain_model(
         logger.error(f"❌ Error retraining model: {e}")
         raise HTTPException(status_code=500, detail=f"Retraining error: {str(e)}")
 
-# Factory function для creating app
+# Factory function for creating app
 def create_volatility_app() -> FastAPI:
-    """Factory function для создания FastAPI app"""
+    """Factory function for creating FastAPI app"""
     return app
 
 if __name__ == "__main__":

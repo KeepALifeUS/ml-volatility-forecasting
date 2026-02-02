@@ -1,12 +1,12 @@
 """
 Central Volatility Forecasting System
 
-Центральная система управления всеми компонентами volatility forecasting:
-- Unified interface для всех models и estimators
+Central system managing all volatility forecasting components:
+- Unified interface for all models and estimators
 - Orchestration of forecasting pipeline
-- Real-time streaming и caching
+- Real-time streaming and caching
 - Production monitoring & alerting
-- Auto-scaling и load balancing
+- Auto-scaling and load balancing
 - Configuration management
 
 Features:
@@ -51,12 +51,12 @@ from ..utils.trading_integration import (
 import numpy as np
 import pandas as pd
 
-# Настройка логирования
+# Logging configuration
 logger = logging.getLogger(__name__)
 
 @dataclass
 class SystemConfiguration:
-    """Конфигурация системы"""
+    """System configuration"""
     # Model configuration
     default_models: List[str] = field(default_factory=lambda: ["GARCH", "HAR-RV", "LSTM"])
     auto_model_selection: bool = True
@@ -93,7 +93,7 @@ class SystemConfiguration:
 
 @dataclass
 class SystemStatus:
-    """Статус системы"""
+    """System status"""
     status: str = "healthy"  # healthy, degraded, error
     timestamp: datetime = field(default_factory=datetime.now)
     
@@ -114,10 +114,10 @@ class SystemStatus:
 
 class VolatilityForecastingSystem:
     """
-    Центральная система volatility forecasting
-    
-    Унифицированный интерфейс для всех volatility models, estimators,
-    risk metrics и trading integration с enterprise-grade features.
+    Central volatility forecasting system
+
+    Unified interface for all volatility models, estimators,
+    risk metrics, and trading integration with enterprise-grade features.
     """
     
     def __init__(self, config: Optional[Dict[str, Any]] = None):
@@ -184,7 +184,7 @@ class VolatilityForecastingSystem:
             raise
 
     async def _initialize_symbol_components(self, symbol: str) -> None:
-        """Initialize all components для конкретного символа"""
+        """Initialize all components for a specific symbol"""
         try:
             logger.info(f"🔄 Initializing components for {symbol}")
             
@@ -268,7 +268,7 @@ class VolatilityForecastingSystem:
             if symbol not in self.models:
                 await self._initialize_symbol_components(symbol)
             
-            # Get sample data (в production - real data service)
+            # Get sample data (in production - real data service)
             price_data = await self._get_sample_price_data(symbol)
             returns = np.log(price_data['close'] / price_data['close'].shift(1)).dropna()
             

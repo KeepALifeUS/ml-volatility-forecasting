@@ -1,10 +1,10 @@
 """
-Risk Metrics Calculation System для Advanced Portfolio Management
+Risk Metrics Calculation System for Advanced Portfolio Management
 
-Реализация comprehensive risk metrics:
+Implementation of comprehensive risk metrics:
 - Value at Risk (VaR) - Historical, Parametric, Monte Carlo
 - Conditional VaR (CVaR/Expected Shortfall)
-- Volatility cones для benchmarking
+- Volatility cones for benchmarking
 - Risk-adjusted returns (Sharpe, Sortino, Calmar)
 - Maximum Drawdown analysis
 - Tail risk measures
@@ -33,12 +33,12 @@ from sklearn.preprocessing import StandardScaler
 from numba import jit, prange
 import warnings
 
-# Настройка логирования
+# Logging configuration
 logger = logging.getLogger(__name__)
 warnings.filterwarnings('ignore', category=RuntimeWarning)
 
 class RiskMeasureType(Enum):
-    """Типы риск-мер"""
+    """Risk measure types"""
     VAR_HISTORICAL = "var_historical"
     VAR_PARAMETRIC = "var_parametric"
     VAR_MONTE_CARLO = "var_monte_carlo"
@@ -49,7 +49,7 @@ class RiskMeasureType(Enum):
     OMEGA_RATIO = "omega_ratio"
 
 class ConfidenceLevel(Enum):
-    """Уровни доверия для риск-мер"""
+    """Confidence levels for risk measures"""
     P95 = 0.95
     P99 = 0.99
     P975 = 0.975
@@ -57,19 +57,19 @@ class ConfidenceLevel(Enum):
 
 @dataclass
 class VaRResult:
-    """Результат расчета Value at Risk"""
+    """Value at Risk calculation result"""
     symbol: str
     timestamp: datetime
     method: RiskMeasureType
     confidence_level: float
     holding_period: int  # days
     
-    # Основные метрики
+    # Core metrics
     var_absolute: float
     var_percentage: float
     expected_shortfall: float
-    
-    # Дополнительные метрики
+
+    # Additional metrics
     var_portfolio_contribution: Optional[float] = None
     marginal_var: Optional[float] = None
     component_var: Optional[float] = None
@@ -82,7 +82,7 @@ class VaRResult:
     # Model parameters
     model_parameters: Dict[str, Any] = field(default_factory=dict)
     
-    # Качество оценки
+    # Estimation quality
     confidence_interval: Optional[Tuple[float, float]] = None
     estimation_error: Optional[float] = None
     
@@ -90,20 +90,20 @@ class VaRResult:
 
 @dataclass
 class DrawdownAnalysis:
-    """Анализ просадок"""
+    """Drawdown analysis"""
     symbol: str
     timestamp: datetime
     analysis_period: Tuple[datetime, datetime]
     
-    # Основные метрики
+    # Core metrics
     max_drawdown: float
     max_drawdown_duration: int  # days
     current_drawdown: float
-    
-    # Статистика просадок
+
+    # Drawdown statistics
     average_drawdown: float
-    drawdown_frequency: float  # просадок в год
-    recovery_time_avg: float  # среднее время восстановления
+    drawdown_frequency: float  # drawdowns per year
+    recovery_time_avg: float  # average recovery time
     
     # Tail risk
     var_of_drawdowns: float
@@ -122,18 +122,18 @@ class DrawdownAnalysis:
 
 @dataclass
 class VolatilityCone:
-    """Volatility cone для benchmarking"""
+    """Volatility cone for benchmarking"""
     symbol: str
     timestamp: datetime
     
-    # Cone данные
-    periods: List[int]  # [1, 5, 22, 63, 252] дней
+    # Cone data
+    periods: List[int]  # [1, 5, 22, 63, 252] days
     percentiles: List[float]  # [5, 25, 50, 75, 95]
     cone_data: pd.DataFrame  # percentiles x periods
     
-    # Текущие уровни
-    current_volatility: Dict[int, float]  # период -> текущая волатильность
-    percentile_ranks: Dict[int, float]  # период -> перцентиль
+    # Current levels
+    current_volatility: Dict[int, float]  # period -> current volatility
+    percentile_ranks: Dict[int, float]  # period -> percentile
     
     # Regime analysis
     volatility_regime: str  # "low", "normal", "high", "extreme"
@@ -163,7 +163,7 @@ class RiskAdjustedReturns:
     calmar_ratio: float
     
     # Advanced ratios
-    treynor_ratio: Optional[float] = None  # если есть benchmark
+    treynor_ratio: Optional[float] = None  # if benchmark is available
     information_ratio: Optional[float] = None
     jensen_alpha: Optional[float] = None
     
@@ -189,14 +189,14 @@ def _calculate_historical_var_numba(
     returns: np.ndarray, 
     confidence_level: float
 ) -> Tuple[float, float]:
-    """Быстрый расчет Historical VaR с Numba"""
+    """Fast Historical VaR calculation with Numba"""
     sorted_returns = np.sort(returns)
     n = len(sorted_returns)
     
     var_index = int((1 - confidence_level) * n)
     var_value = -sorted_returns[var_index] if var_index < n else 0.0
     
-    # Expected Shortfall (среднее хвостовых потерь)
+    # Expected Shortfall (mean of tail losses)
     tail_returns = sorted_returns[:var_index+1] if var_index+1 > 0 else np.array([0.0])
     expected_shortfall = -np.mean(tail_returns) if len(tail_returns) > 0 else 0.0
     
@@ -204,7 +204,7 @@ def _calculate_historical_var_numba(
 
 @jit(nopython=True)
 def _calculate_maximum_drawdown_numba(cumulative_returns: np.ndarray) -> Tuple[float, int]:
-    """Быстрый расчет Maximum Drawdown с Numba"""
+    """Fast Maximum Drawdown calculation with Numba"""
     n = len(cumulative_returns)
     max_dd = 0.0
     max_duration = 0
@@ -226,7 +226,7 @@ def _calculate_maximum_drawdown_numba(cumulative_returns: np.ndarray) -> Tuple[f
 
 @jit(nopython=True)
 def _calculate_underwater_curve_numba(cumulative_returns: np.ndarray) -> np.ndarray:
-    """Быстрый расчет underwater curve с Numba"""
+    """Fast underwater curve calculation with Numba"""
     n = len(cumulative_returns)
     underwater = np.zeros(n)
     
@@ -241,7 +241,7 @@ def _calculate_underwater_curve_numba(cumulative_returns: np.ndarray) -> np.ndar
     return underwater
 
 class BaseRiskCalculator(ABC):
-    """Базовый класс для всех risk calculators"""
+    """Base class for all risk calculators"""
     
     def __init__(self, symbol: str, name: str):
         self.symbol = symbol
@@ -252,11 +252,11 @@ class BaseRiskCalculator(ABC):
 
     @abstractmethod
     async def calculate(self, returns: pd.Series, **kwargs) -> Any:
-        """Расчет риск-метрики"""
+        """Calculate risk metric"""
         pass
 
     def _validate_returns(self, returns: pd.Series) -> Tuple[bool, str]:
-        """Валидация данных доходностей"""
+        """Validate returns data"""
         if returns.empty:
             return False, "Empty returns series"
         
@@ -272,7 +272,7 @@ class VaRCalculator(BaseRiskCalculator):
     """
     Value at Risk Calculator
     
-    Поддерживает multiple методы расчета VaR:
+    Supports multiple VaR calculation methods:
     - Historical Simulation
     - Parametric (Normal, t-distribution)
     - Monte Carlo Simulation
@@ -292,20 +292,20 @@ class VaRCalculator(BaseRiskCalculator):
         try:
             logger.info(f"🔄 Calculating Historical VaR for {self.symbol}...")
             
-            # Валидация
+            # Validation
             is_valid, message = self._validate_returns(returns)
             if not is_valid:
                 raise ValueError(f"Returns validation failed: {message}")
             
             clean_returns = returns.dropna()
             
-            # Scaling для holding period
+            # Scaling for holding period
             if holding_period > 1:
                 scaled_returns = clean_returns * np.sqrt(holding_period)
             else:
                 scaled_returns = clean_returns
             
-            # Асинхронный расчет Historical VaR
+            # Async Historical VaR calculation
             loop = asyncio.get_event_loop()
             var_abs, expected_shortfall = await loop.run_in_executor(
                 None,
@@ -314,7 +314,7 @@ class VaRCalculator(BaseRiskCalculator):
                 confidence_level
             )
             
-            # VaR в процентах
+            # VaR in percentage
             var_pct = var_abs * 100
             
             # Backtesting
@@ -322,7 +322,7 @@ class VaRCalculator(BaseRiskCalculator):
             violations_pct = violations / len(scaled_returns) * 100
             expected_violations_pct = (1 - confidence_level) * 100
             
-            # Kupiec test для backtesting
+            # Kupiec test for backtesting
             kupiec_p_value = await self._kupiec_test(
                 violations, len(scaled_returns), 1 - confidence_level
             )
@@ -376,11 +376,11 @@ class VaRCalculator(BaseRiskCalculator):
             
             clean_returns = returns.dropna()
             
-            # Статистики
+            # Statistics
             mean_return = clean_returns.mean()
             std_return = clean_returns.std()
             
-            # Scaling для holding period
+            # Scaling for holding period
             if holding_period > 1:
                 mean_return = mean_return * holding_period
                 std_return = std_return * np.sqrt(holding_period)
@@ -390,7 +390,7 @@ class VaRCalculator(BaseRiskCalculator):
                 z_score = stats.norm.ppf(1 - confidence_level)
                 var_abs = -(mean_return + z_score * std_return)
                 
-                # Expected shortfall для normal distribution
+                # Expected shortfall for normal distribution
                 phi_z = stats.norm.pdf(z_score)
                 expected_shortfall = std_return * phi_z / (1 - confidence_level) - mean_return
                 
@@ -407,7 +407,7 @@ class VaRCalculator(BaseRiskCalculator):
                 t_score = stats.t.ppf(1 - confidence_level, df, loc, scale)
                 var_abs = -t_score
                 
-                # Expected shortfall для t-distribution (приближение)
+                # Expected shortfall for t-distribution (approximation)
                 expected_shortfall = var_abs * 1.2  # Simplified
                 
                 model_params = {
@@ -423,7 +423,7 @@ class VaRCalculator(BaseRiskCalculator):
             
             var_pct = var_abs * 100
             
-            # Backtesting против исторических данных
+            # Backtesting against historical data
             scaled_returns = clean_returns * (np.sqrt(holding_period) if holding_period > 1 else 1)
             violations = (scaled_returns < -var_abs).sum()
             violations_pct = violations / len(scaled_returns) * 100
@@ -493,7 +493,7 @@ class VaRCalculator(BaseRiskCalculator):
             else:
                 raise ValueError(f"Unsupported model type: {model_type}")
             
-            # VaR из симуляций
+            # VaR from simulations
             var_abs = -np.percentile(simulated_returns, (1 - confidence_level) * 100)
             
             # Expected Shortfall
@@ -502,7 +502,7 @@ class VaRCalculator(BaseRiskCalculator):
             
             var_pct = var_abs * 100
             
-            # Confidence interval для VaR estimate
+            # Confidence interval for VaR estimate
             var_estimates = []
             n_bootstrap = 100
             
@@ -565,12 +565,12 @@ class VaRCalculator(BaseRiskCalculator):
         holding_period: int,
         n_simulations: int
     ) -> np.ndarray:
-        """Bootstrap симуляция доходностей"""
+        """Bootstrap simulation of returns"""
         
         simulated_returns = []
         
         for _ in range(n_simulations):
-            # Sample с replacement
+            # Sample with replacement
             sampled_returns = np.random.choice(returns.values, size=holding_period, replace=True)
             period_return = np.sum(sampled_returns)
             simulated_returns.append(period_return)
@@ -583,12 +583,12 @@ class VaRCalculator(BaseRiskCalculator):
         holding_period: int,
         n_simulations: int
     ) -> np.ndarray:
-        """Parametric симуляция (normal distribution)"""
+        """Parametric simulation (normal distribution)"""
         
         mean_daily = returns.mean()
         std_daily = returns.std()
         
-        # Simulation для holding period
+        # Simulation for holding period
         simulated_returns = []
         
         for _ in range(n_simulations):
@@ -604,10 +604,10 @@ class VaRCalculator(BaseRiskCalculator):
         n_observations: int,
         expected_violation_rate: float
     ) -> float:
-        """Kupiec test для VaR backtesting"""
+        """Kupiec test for VaR backtesting"""
         
         if violations == 0 or violations == n_observations:
-            return 0.0  # Test не применим
+            return 0.0  # Test not applicable
         
         # Likelihood ratio test
         p = violations / n_observations
@@ -622,7 +622,7 @@ class VaRCalculator(BaseRiskCalculator):
                 (n_observations - violations) * np.log((1 - expected_violation_rate) / (1 - p))
             )
         
-        # P-value из chi-square distribution (df=1)
+        # P-value from chi-square distribution (df=1)
         p_value = 1 - stats.chi2.cdf(lr_stat, df=1)
         
         return p_value
@@ -649,7 +649,7 @@ class DrawdownAnalyzer(BaseRiskCalculator):
     """
     Drawdown Analysis Calculator
     
-    Comprehensive анализ просадок:
+    Comprehensive drawdown analysis:
     - Maximum Drawdown
     - Drawdown duration
     - Recovery analysis
@@ -779,7 +779,7 @@ class DrawdownAnalyzer(BaseRiskCalculator):
         self,
         underwater_curve: pd.Series
     ) -> List[Dict[str, Any]]:
-        """Анализ отдельных периодов просадок"""
+        """Analyze individual drawdown periods"""
         
         periods = []
         in_drawdown = False
@@ -842,11 +842,11 @@ class DrawdownAnalyzer(BaseRiskCalculator):
         return periods
 
     def _count_current_underwater_days(self, underwater_curve: pd.Series) -> int:
-        """Подсчет дней текущей просадки"""
+        """Count days in current drawdown"""
         if len(underwater_curve) == 0:
             return 0
         
-        # Count consecutive days at the end где underwater < 0
+        # Count consecutive days at the end where underwater < 0
         count = 0
         for value in reversed(underwater_curve.values):
             if value < -1e-6:
@@ -860,8 +860,8 @@ class VolatilityConeCalculator(BaseRiskCalculator):
     """
     Volatility Cone Calculator
     
-    Создание volatility cones для benchmarking текущих уровней
-    волатильности против исторических диапазонов.
+    Creating volatility cones for benchmarking current volatility
+    levels against historical ranges.
     """
     
     def __init__(self, symbol: str):
@@ -873,7 +873,7 @@ class VolatilityConeCalculator(BaseRiskCalculator):
         periods: List[int] = None,
         percentiles: List[float] = None
     ) -> VolatilityCone:
-        """Расчет volatility cone"""
+        """Calculate volatility cone"""
         try:
             logger.info(f"🔄 Calculating volatility cone for {self.symbol}...")
             
@@ -889,7 +889,7 @@ class VolatilityConeCalculator(BaseRiskCalculator):
             
             clean_returns = returns.dropna()
             
-            # Calculate rolling volatilities для каждого периода
+            # Calculate rolling volatilities for each period
             cone_data = {}
             current_volatilities = {}
             
@@ -921,13 +921,13 @@ class VolatilityConeCalculator(BaseRiskCalculator):
             cone_df = pd.DataFrame(cone_data).T
             cone_df.index.name = 'Period'
             
-            # Calculate percentile ranks для current levels
+            # Calculate percentile ranks for current levels
             percentile_ranks = {}
             for period in current_volatilities:
                 if period in cone_data:
                     current_vol = current_volatilities[period]
                     
-                    # Historical volatilities для этого периода
+                    # Historical volatilities for this period
                     historical_vols = clean_returns.rolling(period).std() * np.sqrt(252)
                     historical_vols = historical_vols.dropna()
                     
@@ -936,7 +936,7 @@ class VolatilityConeCalculator(BaseRiskCalculator):
                     percentile_ranks[period] = rank
             
             # Volatility regime determination
-            # Используем среднесрочный период (22 дня) для классификации
+            # Use medium-term period (22 days) for classification
             if 22 in percentile_ranks:
                 current_rank = percentile_ranks[22]
                 if current_rank < 25:
@@ -995,17 +995,17 @@ class VolatilityConeCalculator(BaseRiskCalculator):
         returns: pd.Series,
         current_percentile: float
     ) -> float:
-        """Оценка вероятности текущего режима волатильности"""
+        """Estimate probability of current volatility regime"""
         
-        # Простая модель на основе исторических данных
+        # Simple model based on historical data
         vol_series = returns.rolling(22).std() * np.sqrt(252)
         vol_series = vol_series.dropna()
         
         if len(vol_series) < 100:
             return 0.5
         
-        # Transition probabilities между режимами
-        # Упрощенная модель - вероятность остаться в том же режиме
+        # Transition probabilities between regimes
+        # Simplified model - probability of staying in the same regime
         if current_percentile < 25:
             # Low vol regime - tend to persist
             persistence_prob = 0.8
@@ -1022,14 +1022,14 @@ class VolatilityConeCalculator(BaseRiskCalculator):
         self,
         volatility_series: pd.Series
     ) -> float:
-        """Расчет half-life mean reversion волатильности"""
+        """Calculate half-life of volatility mean reversion"""
         
         vol_series = volatility_series.dropna()
         
         if len(vol_series) < 50:
             return 30.0  # Default
         
-        # AR(1) model для volatility
+        # AR(1) model for volatility
         y = vol_series.iloc[1:].values
         x = vol_series.iloc[:-1].values
         
@@ -1046,12 +1046,12 @@ class VolatilityConeCalculator(BaseRiskCalculator):
             half_life = np.log(0.5) / np.log(beta)
             return abs(half_life)
         else:
-            return 30.0  # Default если модель не подходит
+            return 30.0  # Default if model is not applicable
 
     async def _calculate_volatility_clustering(self, returns: pd.Series) -> float:
-        """Расчет силы volatility clustering"""
+        """Calculate volatility clustering strength"""
         
-        # Autocorrelation в squared returns
+        # Autocorrelation in squared returns
         squared_returns = returns**2
         
         # Lag-1 autocorrelation
@@ -1065,8 +1065,8 @@ class RiskMetricsCalculator:
     """
     Unified Risk Metrics Calculator
     
-    Координирует все risk calculators и предоставляет
-    comprehensive risk dashboard для portfolio management.
+    Coordinates all risk calculators and provides a
+    comprehensive risk dashboard for portfolio management.
     """
     
     def __init__(self, symbol: str):
@@ -1097,7 +1097,7 @@ class RiskMetricsCalculator:
         logger.info(f"🔄 Calculating comprehensive risk metrics for {self.symbol}...")
         
         try:
-            # Parallel calculation всех risk metrics
+            # Parallel calculation of all risk metrics
             tasks = []
             
             # VaR calculations
@@ -1178,7 +1178,7 @@ class RiskMetricsCalculator:
         returns: pd.Series,
         benchmark_returns: Optional[pd.Series] = None
     ) -> RiskAdjustedReturns:
-        """Расчет risk-adjusted return metrics"""
+        """Calculate risk-adjusted return metrics"""
         
         clean_returns = returns.dropna()
         
@@ -1194,14 +1194,14 @@ class RiskMetricsCalculator:
         risk_free_rate = 0.02  # Assumed 2% risk-free rate
         sharpe_ratio = (annualized_return - risk_free_rate) / annualized_volatility if annualized_volatility > 0 else 0
         
-        # Downside deviation (для Sortino ratio)
+        # Downside deviation (for Sortino ratio)
         negative_returns = clean_returns[clean_returns < 0]
         downside_deviation = negative_returns.std() * np.sqrt(periods_per_year) if len(negative_returns) > 0 else 0
         
         # Sortino ratio
         sortino_ratio = (annualized_return - risk_free_rate) / downside_deviation if downside_deviation > 0 else 0
         
-        # Maximum drawdown для Calmar ratio
+        # Maximum drawdown for Calmar ratio
         cumulative = (1 + clean_returns).cumprod()
         running_max = cumulative.expanding().max()
         drawdown = (cumulative - running_max) / running_max
@@ -1224,7 +1224,7 @@ class RiskMetricsCalculator:
         worst_month = monthly_returns.min() * 100 if len(monthly_returns) > 0 else 0
         positive_months_pct = (monthly_returns > 0).mean() * 100 if len(monthly_returns) > 0 else 0
         
-        # Benchmark-related metrics (если доступен)
+        # Benchmark-related metrics (if available)
         treynor_ratio = None
         information_ratio = None
         jensen_alpha = None
@@ -1286,7 +1286,7 @@ class RiskMetricsCalculator:
         )
 
     async def _generate_risk_summary(self, risk_metrics: Dict[str, Any]) -> Dict[str, Any]:
-        """Генерация risk summary"""
+        """Generate risk summary"""
         
         summary = {
             "overall_risk_level": "medium",
@@ -1346,7 +1346,7 @@ class RiskMetricsCalculator:
         return summary
 
     async def _create_risk_dashboard(self, risk_metrics: Dict[str, Any]) -> Dict[str, Any]:
-        """Создание risk dashboard"""
+        """Create risk dashboard"""
         
         dashboard = {
             "risk_score": 5.0,  # 1-10 scale
@@ -1407,7 +1407,7 @@ class RiskMetricsCalculator:
         return dashboard
 
     def generate_risk_report(self, risk_metrics: Dict[str, Any]) -> str:
-        """Генерация comprehensive risk report"""
+        """Generate comprehensive risk report"""
         
         if not risk_metrics:
             return "No risk metrics available"
@@ -1483,7 +1483,7 @@ Risk-Adjusted Performance:
         
         return report
 
-# Export всех классов
+# Export all classes
 __all__ = [
     "RiskMeasureType",
     "ConfidenceLevel",

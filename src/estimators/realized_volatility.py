@@ -1,17 +1,17 @@
 """
-Realized Volatility Estimators для High-Frequency Crypto Data
+Realized Volatility Estimators for High-Frequency Crypto Data
 
-Реализация modern volatility estimators:
-- Realized Volatility (RV) - классическая реализованная волатильность
-- Bipower Variation (BPV) - robust к jumps
+Implementation of modern volatility estimators:
+- Realized Volatility (RV) - classic realized volatility
+- Bipower Variation (BPV) - robust to jumps
 - Realized Kernel (RK) - microstructure noise robust
-- Realized GARCH - комбинация RV с GARCH моделями
+- Realized GARCH - combination of RV with GARCH models
 - Two-Scale Realized Volatility (TSRV)
 - Multi-Scale Realized Volatility (MSRV)
 
 Features:
 - High-frequency data handling (tick data)
-- Jump detection и robust estimation
+- Jump detection and robust estimation
 - Intraday patterns recognition
 - Real-time calculation
 - Production-ready performance
@@ -32,29 +32,29 @@ from sklearn.preprocessing import StandardScaler
 from numba import jit, prange
 import warnings
 
-# Настройка логирования
+# Logging configuration
 logger = logging.getLogger(__name__)
 warnings.filterwarnings('ignore', category=RuntimeWarning)
 
 @dataclass
 class RealizedVolatilityMeasure:
-    """Результат расчета реализованной волатильности"""
+    """Realized volatility calculation result"""
     symbol: str
     timestamp: datetime
     period: str  # "1D", "1H", etc.
     measure_type: str  # "RV", "BPV", "RK", etc.
     
-    # Основные метрики
+    # Core metrics
     realized_volatility: float
     realized_variance: float
-    
-    # Дополнительные метрики
+
+    # Additional metrics
     jump_component: Optional[float] = None
     continuous_component: Optional[float] = None
     microstructure_bias: Optional[float] = None
     efficiency_ratio: Optional[float] = None
     
-    # Статистики
+    # Statistics
     n_observations: int = 0
     sampling_frequency: str = "1min"
     data_quality_score: float = 1.0
@@ -63,13 +63,13 @@ class RealizedVolatilityMeasure:
     intraday_seasonality: Optional[Dict[str, float]] = None
     volatility_signature: Optional[Dict[str, float]] = None
     
-    # Метаданные
+    # Metadata
     calculation_time: datetime = field(default_factory=datetime.now)
     metadata: Dict[str, Any] = field(default_factory=dict)
 
 @dataclass
 class JumpDetectionResult:
-    """Результат детекции джампов"""
+    """Jump detection result"""
     timestamp: datetime
     jump_detected: bool
     jump_size: float
@@ -80,12 +80,12 @@ class JumpDetectionResult:
 
 @jit(nopython=True)
 def _compute_realized_variance_numba(log_returns: np.ndarray) -> float:
-    """Быстрый расчет реализованной дисперсии с Numba"""
+    """Fast realized variance calculation with Numba"""
     return np.sum(log_returns**2)
 
 @jit(nopython=True) 
 def _compute_bipower_variation_numba(log_returns: np.ndarray) -> float:
-    """Быстрый расчет Bipower Variation с Numba"""
+    """Fast Bipower Variation calculation with Numba"""
     n = len(log_returns)
     if n < 2:
         return 0.0
@@ -100,7 +100,7 @@ def _compute_bipower_variation_numba(log_returns: np.ndarray) -> float:
 
 @jit(nopython=True)
 def _compute_tripower_quarticity_numba(log_returns: np.ndarray) -> float:
-    """Быстрый расчет Tripower Quarticity с Numba"""
+    """Fast Tripower Quarticity calculation with Numba"""
     n = len(log_returns)
     if n < 3:
         return 0.0
@@ -114,7 +114,7 @@ def _compute_tripower_quarticity_numba(log_returns: np.ndarray) -> float:
     return ((np.pi/2)**3) * tq
 
 class BaseVolatilityEstimator(ABC):
-    """Базовый класс для всех estimators"""
+    """Base class for all estimators"""
     
     def __init__(self, symbol: str, name: str):
         self.symbol = symbol
@@ -129,11 +129,11 @@ class BaseVolatilityEstimator(ABC):
         price_data: pd.DataFrame,
         **kwargs
     ) -> RealizedVolatilityMeasure:
-        """Расчет реализованной волатильности"""
+        """Calculate realized volatility"""
         pass
 
     def _validate_data(self, price_data: pd.DataFrame) -> Tuple[bool, str]:
-        """Валидация входных данных"""
+        """Validate input data"""
         if price_data.empty:
             return False, "Empty price data"
         
@@ -148,11 +148,11 @@ class BaseVolatilityEstimator(ABC):
         return True, "Data validation passed"
 
     def _calculate_log_returns(self, prices: pd.Series) -> pd.Series:
-        """Расчет логарифмических доходностей"""
+        """Calculate log returns"""
         return np.log(prices / prices.shift(1)).dropna()
 
     def _detect_outliers(self, returns: pd.Series, method: str = "iqr") -> pd.Series:
-        """Детекция выбросов в доходностях"""
+        """Detect outliers in returns"""
         if method == "iqr":
             Q1 = returns.quantile(0.25)
             Q3 = returns.quantile(0.75)
@@ -168,14 +168,14 @@ class BaseVolatilityEstimator(ABC):
         return pd.Series(True, index=returns.index)
 
     def calculate_data_quality_score(self, price_data: pd.DataFrame) -> float:
-        """Оценка качества данных для расчета волатильности"""
+        """Assess data quality for volatility calculation"""
         scores = []
         
-        # Completeness (отсутствие пропусков)
+        # Completeness (absence of missing values)
         completeness = 1 - (price_data['close'].isna().sum() / len(price_data))
         scores.append(completeness)
         
-        # Regularity (регулярность временных интервалов)
+        # Regularity (regularity of time intervals)
         if len(price_data) > 1:
             time_diffs = price_data['timestamp'].diff().dt.total_seconds()
             time_diffs = time_diffs.dropna()
@@ -197,10 +197,10 @@ class RealizedVolatilityEstimator(BaseVolatilityEstimator):
     """
     Classical Realized Volatility Estimator
     
-    RV = Σ(r_t^2) где r_t - intraday returns
-    
-    Простой и эффективный estimator для liquid markets без значительных джампов.
-    Оптимален для основных криптовалют (BTC, ETH) на коротких интервалах.
+    RV = Sum(r_t^2) where r_t - intraday returns
+
+    Simple and effective estimator for liquid markets without significant jumps.
+    Optimal for major cryptocurrencies (BTC, ETH) on short intervals.
     """
     
     def __init__(self, symbol: str, sampling_frequency: str = "5min"):
@@ -215,35 +215,35 @@ class RealizedVolatilityEstimator(BaseVolatilityEstimator):
         remove_overnight: bool = True
     ) -> RealizedVolatilityMeasure:
         """
-        Расчет классической реализованной волатильности
-        
+        Calculate classic realized volatility
+
         Args:
-            price_data: DataFrame с колонками ['timestamp', 'close']
-            period: Период агрегации ("1D", "1H")
-            annualize: Аннуализировать результат
-            remove_overnight: Удалить overnight returns
+            price_data: DataFrame with columns ['timestamp', 'close']
+            period: Aggregation period ("1D", "1H")
+            annualize: Annualize result
+            remove_overnight: Remove overnight returns
         """
         try:
             logger.info(f"🔄 Calculating RV for {self.symbol} over {period}...")
             
-            # Валидация данных
+            # Validate data
             is_valid, message = self._validate_data(price_data)
             if not is_valid:
                 raise ValueError(f"Data validation failed: {message}")
             
-            # Подготовка данных
+            # Prepare data
             data = price_data.copy()
             data['timestamp'] = pd.to_datetime(data['timestamp'])
             data = data.sort_values('timestamp')
             
-            # Расчет логарифмических доходностей
+            # Calculate log returns
             log_returns = self._calculate_log_returns(data['close'])
             
-            # Удаление overnight returns если требуется
+            # Remove overnight returns if required
             if remove_overnight:
                 log_returns = self._remove_overnight_returns(data, log_returns)
             
-            # Асинхронный расчет с numba
+            # Async calculation with Numba
             loop = asyncio.get_event_loop()
             realized_variance = await loop.run_in_executor(
                 None, 
@@ -253,22 +253,22 @@ class RealizedVolatilityEstimator(BaseVolatilityEstimator):
             
             realized_volatility = np.sqrt(realized_variance)
             
-            # Аннуализация
+            # Annualization
             if annualize:
-                # Предполагаем 252 торговых дня и количество наблюдений в день
+                # Assuming 252 trading days and observations per day
                 periods_per_day = self._estimate_periods_per_day(data)
                 annualization_factor = np.sqrt(252 * periods_per_day)
                 
                 realized_volatility *= annualization_factor
                 realized_variance *= (annualization_factor ** 2)
             
-            # Расчет intraday seasonality
+            # Calculate intraday seasonality
             intraday_seasonality = self._calculate_intraday_seasonality(data, log_returns)
             
-            # Расчет volatility signature
+            # Calculate volatility signature
             volatility_signature = await self._calculate_volatility_signature(data)
             
-            # Оценка качества данных
+            # Assess data quality
             data_quality = self.calculate_data_quality_score(data)
             
             result = RealizedVolatilityMeasure(
@@ -304,16 +304,16 @@ class RealizedVolatilityEstimator(BaseVolatilityEstimator):
         data: pd.DataFrame, 
         log_returns: pd.Series
     ) -> pd.Series:
-        """Удаление overnight returns"""
-        # Простое удаление returns с большими временными промежутками
+        """Remove overnight returns"""
+        # Simple removal of returns with large time gaps
         time_diffs = data['timestamp'].diff().dt.total_seconds()
         median_diff = time_diffs.median()
         
-        # Returns с интервалом > 2x медианы считаются overnight
+        # Returns with interval > 2x median are considered overnight
         overnight_mask = time_diffs > (2 * median_diff)
         overnight_indices = overnight_mask[overnight_mask].index
         
-        # Удаляем соответствующие returns
+        # Remove corresponding returns
         clean_returns = log_returns.copy()
         for idx in overnight_indices:
             if idx in clean_returns.index:
@@ -322,16 +322,16 @@ class RealizedVolatilityEstimator(BaseVolatilityEstimator):
         return clean_returns
 
     def _estimate_periods_per_day(self, data: pd.DataFrame) -> int:
-        """Оценка количества наблюдений в день"""
+        """Estimate observations per day"""
         if len(data) < 2:
-            return 1440  # Default: минутные данные
+            return 1440  # Default: minute data
         
-        # Медианный интервал в минутах
+        # Median interval in minutes
         time_diffs_minutes = data['timestamp'].diff().dt.total_seconds() / 60
         median_interval = time_diffs_minutes.median()
         
         if median_interval > 0:
-            return int(1440 / median_interval)  # 1440 минут в дне
+            return int(1440 / median_interval)  # 1440 minutes per day
         
         return 1440
 
@@ -340,22 +340,22 @@ class RealizedVolatilityEstimator(BaseVolatilityEstimator):
         data: pd.DataFrame,
         log_returns: pd.Series
     ) -> Dict[str, float]:
-        """Расчет внутридневной сезонности"""
-        if len(data) < 24:  # Минимум данных для анализа
+        """Calculate intraday seasonality"""
+        if len(data) < 24:  # Minimum data for analysis
             return {}
         
-        # Добавляем час к данным
+        # Add hour to data
         data_with_returns = data.copy()
         data_with_returns['log_returns'] = log_returns.reindex(data.index).fillna(0)
         data_with_returns['hour'] = data_with_returns['timestamp'].dt.hour
         
-        # Средняя волатильность по часам
+        # Average volatility by hour
         hourly_vol = data_with_returns.groupby('hour')['log_returns'].apply(
             lambda x: np.sqrt(np.sum(x**2))
         )
         
         if len(hourly_vol) > 0:
-            # Нормализация относительно среднего
+            # Normalize relative to mean
             avg_vol = hourly_vol.mean()
             if avg_vol > 0:
                 normalized_seasonality = (hourly_vol / avg_vol).to_dict()
@@ -368,12 +368,12 @@ class RealizedVolatilityEstimator(BaseVolatilityEstimator):
         data: pd.DataFrame
     ) -> Dict[str, float]:
         """
-        Расчет volatility signature plot
-        Зависимость реализованной волатильности от sampling frequency
+        Calculate volatility signature plot
+        Dependence of realized volatility on sampling frequency
         """
         signature = {}
         
-        # Разные sampling frequencies для анализа
+        # Different sampling frequencies for analysis
         frequencies = ["1min", "5min", "15min", "30min", "1H"]
         
         for freq in frequencies:
@@ -398,8 +398,8 @@ class BipowerVariation(BaseVolatilityEstimator):
     
     BV = (π/2) * Σ|r_{t-1}| * |r_t|
     
-    Robust estimator для рынков с джампами. Оценивает непрерывную компоненту
-    волатильности, исключая effect джампов. Идеален для volatile криптовалют.
+    Robust estimator for markets with jumps. Estimates the continuous component
+    of volatility, excluding the effect of jumps. Ideal for volatile cryptocurrencies.
     """
     
     def __init__(self, symbol: str):
@@ -412,11 +412,11 @@ class BipowerVariation(BaseVolatilityEstimator):
         annualize: bool = True,
         detect_jumps: bool = True
     ) -> RealizedVolatilityMeasure:
-        """Расчет Bipower Variation"""
+        """Calculate Bipower Variation"""
         try:
             logger.info(f"🔄 Calculating BPV for {self.symbol}...")
             
-            # Подготовка данных
+            # Prepare data
             is_valid, message = self._validate_data(price_data)
             if not is_valid:
                 raise ValueError(f"Data validation failed: {message}")
@@ -430,7 +430,7 @@ class BipowerVariation(BaseVolatilityEstimator):
             if len(log_returns) < 2:
                 raise ValueError("Insufficient data for BPV calculation")
             
-            # Асинхронный расчет BPV
+            # Async BPV calculation
             loop = asyncio.get_event_loop()
             bipower_variation = await loop.run_in_executor(
                 None,
@@ -440,7 +440,7 @@ class BipowerVariation(BaseVolatilityEstimator):
             
             bipower_volatility = np.sqrt(bipower_variation)
             
-            # Расчет RV для сравнения
+            # Calculate RV for comparison
             realized_variance = _compute_realized_variance_numba(log_returns.values)
             
             # Jump detection
@@ -457,7 +457,7 @@ class BipowerVariation(BaseVolatilityEstimator):
                     jump_component = max(0, realized_variance - bipower_variation)
                     logger.info(f"🚨 Jump detected: size={jump_component:.6f}")
             
-            # Аннуализация
+            # Annualization
             if annualize:
                 periods_per_day = self._estimate_periods_per_day(data)
                 annualization_factor = np.sqrt(252 * periods_per_day)
@@ -468,7 +468,7 @@ class BipowerVariation(BaseVolatilityEstimator):
                 if jump_component is not None:
                     jump_component *= (annualization_factor ** 2)
             
-            # Эффективность estimator (отношение к RV)
+            # Estimator efficiency (ratio to RV)
             efficiency_ratio = bipower_variation / realized_variance if realized_variance > 0 else 1.0
             
             result = RealizedVolatilityMeasure(
@@ -523,7 +523,7 @@ class BipowerVariation(BaseVolatilityEstimator):
                 critical_value=0.0
             )
         
-        # Расчет Tripower Quarticity
+        # Calculate Tripower Quarticity
         loop = asyncio.get_event_loop()
         tripower_quarticity = await loop.run_in_executor(
             None,
@@ -562,7 +562,7 @@ class BipowerVariation(BaseVolatilityEstimator):
         )
 
     def _estimate_periods_per_day(self, data: pd.DataFrame) -> int:
-        """Оценка количества наблюдений в день"""
+        """Estimate observations per day"""
         if len(data) < 2:
             return 1440
         
@@ -575,11 +575,11 @@ class RealizedKernel(BaseVolatilityEstimator):
     """
     Realized Kernel Estimator - Microstructure Noise Robust
     
-    RK = Σ w_h * γ_h где γ_h - autocovariances, w_h - kernel weights
+    RK = Sum w_h * gamma_h where gamma_h - autocovariances, w_h - kernel weights
     
-    Advanced estimator устойчивый к market microstructure noise.
-    Использует kernel weighting для коррекции bias от noise.
-    Оптимален для high-frequency crypto data с bid-ask bounces.
+    Advanced estimator robust to market microstructure noise.
+    Uses kernel weighting for noise bias correction.
+    Optimal for high-frequency crypto data with bid-ask bounces.
     """
     
     def __init__(self, symbol: str, kernel_type: str = "bartlett"):
@@ -593,11 +593,11 @@ class RealizedKernel(BaseVolatilityEstimator):
         annualize: bool = True,
         optimal_bandwidth: bool = True
     ) -> RealizedVolatilityMeasure:
-        """Расчет Realized Kernel"""
+        """Calculate Realized Kernel"""
         try:
             logger.info(f"🔄 Calculating RK for {self.symbol}...")
             
-            # Валидация данных
+            # Validate data
             is_valid, message = self._validate_data(price_data)
             if not is_valid:
                 raise ValueError(f"Data validation failed: {message}")
@@ -617,7 +617,7 @@ class RealizedKernel(BaseVolatilityEstimator):
             else:
                 H = min(10, len(log_returns) // 4)
             
-            # Расчет autocovariances
+            # Calculate autocovariances
             autocovariances = await self._calculate_autocovariances(log_returns, H)
             
             # Kernel weights
@@ -632,16 +632,16 @@ class RealizedKernel(BaseVolatilityEstimator):
                 if h == 0:
                     realized_kernel += weight * autocov
                 else:
-                    realized_kernel += 2 * weight * autocov  # Симметричность
+                    realized_kernel += 2 * weight * autocov  # Symmetry
             
             realized_kernel_vol = np.sqrt(max(0, realized_kernel))
             
-            # Оценка microstructure bias
+            # Estimate microstructure bias
             microstructure_bias = self._estimate_microstructure_bias(
                 autocovariances, realized_kernel
             )
             
-            # Аннуализация
+            # Annualization
             if annualize:
                 periods_per_day = self._estimate_periods_per_day(data)
                 annualization_factor = np.sqrt(252 * periods_per_day)
@@ -686,13 +686,13 @@ class RealizedKernel(BaseVolatilityEstimator):
         if max_H < 2:
             return 2
         
-        # Cross-validation для выбора оптимальной bandwidth
+        # Cross-validation for optimal bandwidth selection
         bandwidths = range(2, max_H + 1)
         cv_scores = []
         
         for H in bandwidths:
             try:
-                # Simple cross-validation score (можно улучшить)
+                # Simple cross-validation score (can be improved)
                 autocovariances = await self._calculate_autocovariances(returns, H)
                 kernel_weights = self._get_kernel_weights(H, self.kernel_type)
                 
@@ -703,7 +703,7 @@ class RealizedKernel(BaseVolatilityEstimator):
                     autocov = autocovariances.get(h, 0.0)
                     rk += weight * autocov if h == 0 else 2 * weight * autocov
                 
-                # Score: предпочитаем положительные значения близкие к RV
+                # Score: prefer positive values close to RV
                 rv = np.sum(returns**2)
                 score = -abs(rk - rv) if rk > 0 else -1e6
                 cv_scores.append(score)
@@ -711,7 +711,7 @@ class RealizedKernel(BaseVolatilityEstimator):
             except:
                 cv_scores.append(-1e6)
         
-        # Выбор bandwidth с максимальным score
+        # Select bandwidth with maximum score
         optimal_idx = np.argmax(cv_scores)
         optimal_H = bandwidths[optimal_idx]
         
@@ -723,7 +723,7 @@ class RealizedKernel(BaseVolatilityEstimator):
         returns: pd.Series,
         max_lag: int
     ) -> Dict[int, float]:
-        """Расчет autocovariances до max_lag"""
+        """Calculate autocovariances up to max_lag"""
         autocovariances = {}
         returns_values = returns.values
         n = len(returns_values)
@@ -744,7 +744,7 @@ class RealizedKernel(BaseVolatilityEstimator):
         return autocovariances
 
     def _get_kernel_weights(self, H: int, kernel_type: str) -> Dict[int, float]:
-        """Получение весов kernel функции"""
+        """Get kernel function weights"""
         weights = {}
         
         if kernel_type == "bartlett":
@@ -786,21 +786,21 @@ class RealizedKernel(BaseVolatilityEstimator):
         autocovariances: Dict[int, float],
         realized_kernel: float
     ) -> float:
-        """Оценка microstructure bias"""
+        """Estimate microstructure bias"""
         if len(autocovariances) < 2:
             return 0.0
         
-        # Простая оценка: отрицательная первая autocovariance указывает на bias
+        # Simple estimate: negative first autocovariance indicates bias
         first_autocov = autocovariances.get(1, 0.0)
         
         if first_autocov < 0:
-            # Bias примерно равен удвоенной отрицательной autocovariance
+            # Bias approximately equals twice the negative autocovariance
             return -2 * first_autocov
         
         return 0.0
 
     def _estimate_periods_per_day(self, data: pd.DataFrame) -> int:
-        """Оценка количества наблюдений в день"""
+        """Estimate observations per day"""
         if len(data) < 2:
             return 1440
         
@@ -811,11 +811,11 @@ class RealizedKernel(BaseVolatilityEstimator):
 
 class RealizedGARCH(BaseVolatilityEstimator):
     """
-    Realized GARCH Model - Комбинация RV с GARCH
+    Realized GARCH Model - Combination of RV with GARCH
     
-    Объединяет high-frequency realized measures с GARCH моделированием
-    для улучшения прогнозов волатильности. Использует realized volatility
-    как дополнительную информацию в GARCH framework.
+    Combines high-frequency realized measures with GARCH modeling
+    for improved volatility forecasts. Uses realized volatility
+    as additional information in the GARCH framework.
     """
     
     def __init__(self, symbol: str):
@@ -830,7 +830,7 @@ class RealizedGARCH(BaseVolatilityEstimator):
         forecast_horizon: int = 1
     ) -> RealizedVolatilityMeasure:
         """
-        Расчет Realized GARCH
+        Calculate Realized GARCH
         
         Args:
             price_data: High-frequency price data
@@ -841,15 +841,15 @@ class RealizedGARCH(BaseVolatilityEstimator):
         try:
             logger.info(f"🔄 Calculating Realized GARCH for {self.symbol}...")
             
-            # 1. Расчет daily realized volatility
+            # 1. Calculate daily realized volatility
             rv_estimator = RealizedVolatilityEstimator(self.symbol)
             
-            # Group by day и calculate daily RV
+            # Group by day and calculate daily RV
             price_data['date'] = pd.to_datetime(price_data['timestamp']).dt.date
             daily_rv_measures = {}
             
             for date, day_data in price_data.groupby('date'):
-                if len(day_data) > 10:  # Минимум данных для дня
+                if len(day_data) > 10:  # Minimum data for a day
                     rv_measure = await rv_estimator.estimate(
                         day_data, 
                         period="1D", 
@@ -857,7 +857,7 @@ class RealizedGARCH(BaseVolatilityEstimator):
                     )
                     daily_rv_measures[date] = rv_measure.realized_variance
             
-            # 2. Создание серии daily RV
+            # 2. Create daily RV series
             daily_rv_series = pd.Series(daily_rv_measures)
             daily_rv_series.index = pd.to_datetime(daily_rv_series.index)
             
@@ -873,7 +873,7 @@ class RealizedGARCH(BaseVolatilityEstimator):
                 forecast_horizon
             )
             
-            # 5. Результат
+            # 5. Result
             result = RealizedVolatilityMeasure(
                 symbol=self.symbol,
                 timestamp=datetime.now(),
@@ -906,10 +906,10 @@ class RealizedGARCH(BaseVolatilityEstimator):
         daily_rv: pd.Series
     ) -> Dict[str, Any]:
         """
-        Подгонка Realized GARCH модели
+        Fit Realized GARCH model
         
-        Использует measurement equation: log(RV_t) = ξ + φ*log(h_t) + δ*z_t + u_t
-        где h_t - условная дисперсия из GARCH
+        Uses measurement equation: log(RV_t) = xi + phi*log(h_t) + delta*z_t + u_t
+        where h_t - conditional variance from GARCH
         """
         from arch import arch_model
         from arch.univariate import ZeroMean, GARCH, Normal
@@ -939,17 +939,17 @@ class RealizedGARCH(BaseVolatilityEstimator):
         # 2. Extract conditional variance
         conditional_variance = garch_fit.conditional_volatility**2 / 10000  # Convert back
         
-        # 3. Measurement equation для RV
+        # 3. Measurement equation for RV
         # log(RV_t) = ξ + φ*log(h_t) + u_t
         
-        # Align conditional variance с RV
+        # Align conditional variance with RV
         h_aligned = conditional_variance.reindex(rv_aligned.index).dropna()
         rv_final = rv_aligned.reindex(h_aligned.index).dropna()
         
         if len(rv_final) < 10:
             raise ValueError("Insufficient data after alignment")
         
-        # Log transformation (избегаем log(0))
+        # Log transformation (avoid log(0))
         log_rv = np.log(np.maximum(rv_final, 1e-10))
         log_h = np.log(np.maximum(h_aligned, 1e-10))
         
@@ -1003,7 +1003,7 @@ class RealizedGARCH(BaseVolatilityEstimator):
         model_result: Dict[str, Any],
         horizon: int
     ) -> Dict[str, Any]:
-        """Прогноз Realized GARCH"""
+        """Forecast Realized GARCH"""
         
         garch_fit = model_result["garch_model"]
         params = model_result["parameters"]
@@ -1021,7 +1021,7 @@ class RealizedGARCH(BaseVolatilityEstimator):
         rv_forecast = np.exp(log_rv_forecast)
         vol_forecast = np.sqrt(rv_forecast)
         
-        # Prediction intervals (простая аппроксимация)
+        # Prediction intervals (simple approximation)
         sigma_u = params["sigma_u"]
         log_rv_lower = log_rv_forecast - 1.96 * sigma_u
         log_rv_upper = log_rv_forecast + 1.96 * sigma_u
@@ -1053,10 +1053,10 @@ class TwoScaleRealizedVolatility(BaseVolatilityEstimator):
     """
     Two-Scale Realized Volatility (TSRV)
     
-    Bias correction для microstructure noise используя две частоты sampling.
+    Bias correction for microstructure noise using two sampling frequencies.
     TSRV = RV_fast - (n_fast/n_slow) * RV_slow_bias
     
-    Эффективен для очень high-frequency crypto data с significant noise.
+    Effective for very high-frequency crypto data with significant noise.
     """
     
     def __init__(self, symbol: str):
@@ -1069,11 +1069,11 @@ class TwoScaleRealizedVolatility(BaseVolatilityEstimator):
         slow_frequency: str = "5min",
         period: str = "1D"
     ) -> RealizedVolatilityMeasure:
-        """Расчет Two-Scale Realized Volatility"""
+        """Calculate Two-Scale Realized Volatility"""
         try:
             logger.info(f"🔄 Calculating TSRV for {self.symbol}...")
             
-            # Подготовка данных
+            # Prepare data
             data = price_data.copy()
             data['timestamp'] = pd.to_datetime(data['timestamp'])
             data = data.sort_values('timestamp').set_index('timestamp')
@@ -1131,15 +1131,15 @@ class TwoScaleRealizedVolatility(BaseVolatilityEstimator):
             logger.error(f"❌ Error calculating TSRV: {e}")
             raise
 
-# Асинхронный volatility estimator manager
+# Async volatility estimator manager
 
 class VolatilityEstimatorManager:
     """
-    Manager для всех volatility estimators
+    Manager for all volatility estimators
     
     Features:
-    - Parallel estimation с разными methods
-    - Model comparison и selection
+    - Parallel estimation with different methods
+    - Model comparison and selection
     - Real-time streaming calculations
     - Performance monitoring
     """
@@ -1162,7 +1162,7 @@ class VolatilityEstimatorManager:
         daily_returns: Optional[pd.Series] = None,
         include_realized_garch: bool = False
     ) -> Dict[str, RealizedVolatilityMeasure]:
-        """Параллельный расчет всех estimators"""
+        """Parallel calculation of all estimators"""
         
         tasks = {}
         
@@ -1173,19 +1173,19 @@ class VolatilityEstimatorManager:
             else:
                 tasks[name] = estimator.estimate(price_data)
         
-        # Realized GARCH если есть daily returns
+        # Realized GARCH if daily returns available
         if include_realized_garch and daily_returns is not None:
             rg_estimator = RealizedGARCH(self.symbol)
             tasks["RG"] = rg_estimator.estimate(price_data, daily_returns)
         
-        # Параллельное выполнение
+        # Parallel execution
         results = {}
         completed_tasks = await asyncio.gather(
             *tasks.values(), 
             return_exceptions=True
         )
         
-        # Обработка результатов
+        # Process results
         for i, (name, task_result) in enumerate(zip(tasks.keys(), completed_tasks)):
             if isinstance(task_result, Exception):
                 logger.warning(f"⚠️ {name} estimation failed: {task_result}")
@@ -1200,7 +1200,7 @@ class VolatilityEstimatorManager:
         self, 
         results: Dict[str, RealizedVolatilityMeasure]
     ) -> pd.DataFrame:
-        """Сравнение результатов estimators"""
+        """Compare estimator results"""
         
         comparison_data = []
         for name, result in results.items():
@@ -1223,7 +1223,7 @@ class VolatilityEstimatorManager:
         results: Dict[str, RealizedVolatilityMeasure],
         method: str = "median"
     ) -> float:
-        """Консенсус estimate из нескольких методов"""
+        """Consensus estimate from multiple methods"""
         
         volatilities = [r.realized_volatility for r in results.values()]
         
@@ -1245,7 +1245,7 @@ class VolatilityEstimatorManager:
             return np.mean(volatilities)
 
     def generate_summary_report(self) -> str:
-        """Генерация summary report"""
+        """Generate summary report"""
         if not self.results_history:
             return "No estimation results available."
         
@@ -1275,7 +1275,7 @@ Estimation Quality:
         
         return report
 
-# Экспорт всех классов
+# Export all classes
 __all__ = [
     "BaseVolatilityEstimator",
     "RealizedVolatilityEstimator", 

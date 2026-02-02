@@ -1,18 +1,18 @@
 """
-Implied Volatility Extraction для Crypto Options & Volatility Indices
+Implied Volatility Extraction for Crypto Options & Volatility Indices
 
-Реализация advanced implied volatility models:
-- Options-based IV extraction (если доступны опционы)
-- Volatility smile modeling (вся поверхность волатильности)
-- Term structure analysis (временная структура волатильности)
-- Crypto Volatility Index (VIX-style для криптовалют)
+Implementation of advanced implied volatility models:
+- Options-based IV extraction (if options are available)
+- Volatility smile modeling (full volatility surface)
+- Term structure analysis (volatility term structure)
+- Crypto Volatility Index (VIX-style for cryptocurrencies)
 - Model-free implied volatility
 - Risk-neutral density extraction
 
 Features:
 - Real-time options data processing
 - Advanced volatility surface interpolation
-- Greeks calculation и risk management
+- Greeks calculation and risk management
 - Production-ready performance optimization
 - Comprehensive error handling
 """
@@ -33,17 +33,17 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.ensemble import RandomForestRegressor
 import warnings
 
-# Настройка логирования  
+# Logging configuration  
 logger = logging.getLogger(__name__)
 warnings.filterwarnings('ignore', category=RuntimeWarning)
 
 class OptionType(Enum):
-    """Тип опциона"""
+    """Option type"""
     CALL = "call"
     PUT = "put"
 
 class VolatilityRegime(Enum):
-    """Режим волатильности"""
+    """Volatility regime"""
     LOW = "low"
     NORMAL = "normal"
     HIGH = "high"
@@ -51,7 +51,7 @@ class VolatilityRegime(Enum):
 
 @dataclass
 class OptionData:
-    """Данные опциона"""
+    """Option data"""
     symbol: str
     option_type: OptionType
     strike: float
@@ -61,7 +61,7 @@ class OptionData:
     risk_free_rate: float
     timestamp: datetime
     
-    # Дополнительные поля
+    # Additional fields
     volume: Optional[float] = None
     open_interest: Optional[float] = None
     bid: Optional[float] = None
@@ -69,7 +69,7 @@ class OptionData:
     
     @property
     def time_to_expiry(self) -> float:
-        """Время до экспирации в годах"""
+        """Time to expiry in years"""
         if hasattr(self, '_time_to_expiry'):
             return self._time_to_expiry
         
@@ -88,24 +88,24 @@ class OptionData:
 
 @dataclass
 class ImpliedVolatilityResult:
-    """Результат расчета implied volatility"""
+    """Implied volatility calculation result"""
     symbol: str
     timestamp: datetime
     option_data: OptionData
     implied_volatility: float
     
-    # Метрики качества
+    # Quality metrics
     pricing_error: float
     vega: float
     gamma: float
     theta: float
     
-    # Метод расчета
+    # Calculation method
     method: str = "black_scholes"
     iterations: int = 0
     convergence_achieved: bool = True
     
-    # Дополнительная информация
+    # Additional information
     bid_iv: Optional[float] = None
     ask_iv: Optional[float] = None
     mid_iv: Optional[float] = None
@@ -114,22 +114,22 @@ class ImpliedVolatilityResult:
 
 @dataclass
 class VolatilitySmile:
-    """Результат моделирования volatility smile"""
+    """Volatility smile modeling result"""
     symbol: str
     expiry: datetime
     timestamp: datetime
     
-    # Smile данные
+    # Smile data
     strikes: np.ndarray
     implied_volatilities: np.ndarray
     
-    # Параметры модели
+    # Model parameters
     atm_volatility: float
     skew: float
     kurtosis: float
     smile_parameters: Dict[str, float]
     
-    # Качество подгонки
+    # Fit quality
     r_squared: float
     rmse: float
     
@@ -146,26 +146,26 @@ class CryptoVolatilityIndex:
     symbol: str
     timestamp: datetime
     
-    # Основные метрики
+    # Main metrics
     volatility_index: float
     regime: VolatilityRegime
     
-    # Компоненты
+    # Components
     near_term_vol: float
     next_term_vol: float
     
     # Term structure
     term_structure: Dict[str, float]  # "30D", "60D", "90D", etc.
     
-    # Подуровни
+    # Sub-levels
     call_vol_index: float
     put_vol_index: float
     
-    # Метрики качества
+    # Quality metrics
     data_quality_score: float
     n_options_used: int
     
-    # Сравнение с историческими уровнями
+    # Comparison with historical levels
     percentile_1m: float
     percentile_3m: float
     percentile_1y: float
@@ -176,15 +176,15 @@ def black_scholes_price(
     S: float, K: float, T: float, r: float, sigma: float, option_type: OptionType
 ) -> float:
     """
-    Black-Scholes опционное ценообразование
+    Black-Scholes option pricing
     
     Args:
-        S: Цена базового актива
-        K: Страйк
-        T: Время до экспирации
-        r: Безрисковая ставка
-        sigma: Волатильность
-        option_type: Тип опциона
+        S: Underlying asset price
+        K: Strike price
+        T: Time to expiry
+        r: Risk-free rate
+        sigma: Volatility
+        option_type: Option type
     """
     if T <= 0 or sigma <= 0:
         return max(0, S - K) if option_type == OptionType.CALL else max(0, K - S)
@@ -235,7 +235,7 @@ def black_scholes_theta(
     return first_term + second_term
 
 class BaseImpliedVolatilityExtractor(ABC):
-    """Базовый класс для извлечения implied volatility"""
+    """Base class for implied volatility extraction"""
     
     def __init__(self, symbol: str, name: str):
         self.symbol = symbol
@@ -246,11 +246,11 @@ class BaseImpliedVolatilityExtractor(ABC):
 
     @abstractmethod
     async def extract_iv(self, option_data: OptionData) -> ImpliedVolatilityResult:
-        """Извлечение implied volatility из данных опциона"""
+        """Extract implied volatility from option data"""
         pass
 
     def _validate_option_data(self, option_data: OptionData) -> Tuple[bool, str]:
-        """Валидация данных опциона"""
+        """Validate option data"""
         if option_data.price <= 0:
             return False, "Option price must be positive"
         
@@ -263,7 +263,7 @@ class BaseImpliedVolatilityExtractor(ABC):
         if option_data.time_to_expiry <= 0:
             return False, "Time to expiry must be positive"
         
-        # Проверка на arbitrage
+        # Arbitrage check
         if option_data.option_type == OptionType.CALL:
             intrinsic = max(0, option_data.underlying_price - option_data.strike)
         else:
@@ -278,8 +278,8 @@ class ImpliedVolatilityExtractor(BaseImpliedVolatilityExtractor):
     """
     Standard Black-Scholes Implied Volatility Extractor
     
-    Использует Newton-Raphson итерацию для нахождения implied volatility
-    из market prices опционов через Black-Scholes формулу.
+    Uses Newton-Raphson iteration to find implied volatility
+    from option market prices via the Black-Scholes formula.
     """
     
     def __init__(self, symbol: str, max_iterations: int = 100, tolerance: float = 1e-6):
@@ -288,14 +288,14 @@ class ImpliedVolatilityExtractor(BaseImpliedVolatilityExtractor):
         self.tolerance = tolerance
 
     async def extract_iv(self, option_data: OptionData) -> ImpliedVolatilityResult:
-        """Извлечение IV с Newton-Raphson методом"""
+        """Extract IV using Newton-Raphson method"""
         try:
-            # Валидация
+            # Validation
             is_valid, message = self._validate_option_data(option_data)
             if not is_valid:
                 raise ValueError(f"Invalid option data: {message}")
             
-            # Асинхронное вычисление
+            # Asynchronous computation
             loop = asyncio.get_event_loop()
             iv_result = await loop.run_in_executor(
                 None, 
@@ -327,15 +327,15 @@ class ImpliedVolatilityExtractor(BaseImpliedVolatilityExtractor):
             raise
 
     def _newton_raphson_iv(self, option_data: OptionData) -> Dict[str, Any]:
-        """Newton-Raphson поиск implied volatility"""
+        """Newton-Raphson implied volatility search"""
         
-        # Начальное приближение
+        # Initial approximation
         if option_data.option_type == OptionType.CALL:
             intrinsic = max(0, option_data.underlying_price - option_data.strike)
         else:
             intrinsic = max(0, option_data.strike - option_data.underlying_price)
         
-        # Heuristic для начального приближения
+        # Heuristic for initial approximation
         time_value = option_data.price - intrinsic
         if time_value > 0 and option_data.time_to_expiry > 0:
             initial_iv = np.sqrt(2 * np.pi / option_data.time_to_expiry) * \
@@ -343,11 +343,11 @@ class ImpliedVolatilityExtractor(BaseImpliedVolatilityExtractor):
         else:
             initial_iv = 0.2  # 20% default
         
-        iv = max(0.01, min(5.0, initial_iv))  # Ограничения
+        iv = max(0.01, min(5.0, initial_iv))  # Constraints
         
-        # Newton-Raphson итерации
+        # Newton-Raphson iterations
         for i in range(self.max_iterations):
-            # Теоретическая цена
+            # Theoretical price
             theo_price = black_scholes_price(
                 option_data.underlying_price,
                 option_data.strike,
@@ -357,7 +357,7 @@ class ImpliedVolatilityExtractor(BaseImpliedVolatilityExtractor):
                 option_data.option_type
             )
             
-            # Vega для производной
+            # Vega for derivative
             vega = black_scholes_vega(
                 option_data.underlying_price,
                 option_data.strike,
@@ -366,14 +366,14 @@ class ImpliedVolatilityExtractor(BaseImpliedVolatilityExtractor):
                 iv
             )
             
-            # Ошибка цены
+            # Price error
             price_error = theo_price - option_data.price
             
-            # Проверка сходимости
+            # Convergence check
             if abs(price_error) < self.tolerance:
                 break
             
-            # Проверка vega
+            # Vega check
             if abs(vega) < 1e-10:
                 break
             
@@ -381,7 +381,7 @@ class ImpliedVolatilityExtractor(BaseImpliedVolatilityExtractor):
             iv_new = iv - price_error / vega
             iv = max(0.001, min(10.0, iv_new))  # Clamp IV
         
-        # Финальные расчеты
+        # Final calculations
         final_price = black_scholes_price(
             option_data.underlying_price,
             option_data.strike,
@@ -427,11 +427,11 @@ class ImpliedVolatilityExtractor(BaseImpliedVolatilityExtractor):
         }
 
     async def extract_iv_bid_ask(self, option_data: OptionData) -> ImpliedVolatilityResult:
-        """Извлечение IV для bid/ask spread"""
+        """Extract IV for bid/ask spread"""
         if option_data.bid is None or option_data.ask is None:
             return await self.extract_iv(option_data)
         
-        # IV для bid
+        # IV for bid
         bid_option = OptionData(
             symbol=option_data.symbol,
             option_type=option_data.option_type,
@@ -443,7 +443,7 @@ class ImpliedVolatilityExtractor(BaseImpliedVolatilityExtractor):
             timestamp=option_data.timestamp
         )
         
-        # IV для ask
+        # IV for ask
         ask_option = OptionData(
             symbol=option_data.symbol,
             option_type=option_data.option_type,
@@ -460,7 +460,7 @@ class ImpliedVolatilityExtractor(BaseImpliedVolatilityExtractor):
             ask_result = await self.extract_iv(ask_option)
             mid_result = await self.extract_iv(option_data)
             
-            # Комбинированный результат
+            # Combined result
             result = mid_result
             result.bid_iv = bid_result.implied_volatility
             result.ask_iv = ask_result.implied_volatility
@@ -482,8 +482,8 @@ class VolatilitySmileModel:
     """
     Volatility Smile Modeling
     
-    Моделирование всей поверхности implied volatility как функции
-    strike и time to expiry. Поддерживает разные параметрические модели.
+    Modeling the entire implied volatility surface as a function of
+    strike and time to expiry. Supports different parametric models.
     """
     
     def __init__(self, symbol: str, model_type: str = "sabr"):
@@ -500,23 +500,23 @@ class VolatilitySmileModel:
         method: str = "least_squares"
     ) -> VolatilitySmile:
         """
-        Подгонка volatility smile для конкретной экспирации
+        Fit volatility smile for a specific expiry
         
         Args:
-            options_data: Список опционов для одной экспирации
-            expiry: Дата экспирации
-            method: Метод подгонки
+            options_data: List of options for one expiry
+            expiry: Expiry date
+            method: Fitting method
         """
         try:
             logger.info(f"🔄 Fitting volatility smile for {expiry.date()}...")
             
-            # Фильтрация данных по экспирации
+            # Filter data by expiry
             expiry_options = [opt for opt in options_data if opt.expiry.date() == expiry.date()]
             
             if len(expiry_options) < 3:
                 raise ValueError(f"Insufficient options for smile fitting: {len(expiry_options)}")
             
-            # Извлечение IV для всех опционов
+            # Extract IV for all options
             iv_extractor = ImpliedVolatilityExtractor(self.symbol)
             iv_results = []
             
@@ -531,16 +531,16 @@ class VolatilitySmileModel:
             if len(iv_results) < 3:
                 raise ValueError("Insufficient valid IV extractions")
             
-            # Подготовка данных для подгонки
+            # Prepare data for fitting
             strikes = np.array([r.option_data.strike for r in iv_results])
             ivs = np.array([r.implied_volatility for r in iv_results])
             underlying_price = iv_results[0].option_data.underlying_price
             
-            # Moneyness для нормализации
+            # Moneyness for normalization
             moneyness = strikes / underlying_price
             log_moneyness = np.log(moneyness)
             
-            # Подгонка модели
+            # Model fitting
             if self.model_type == "sabr":
                 smile_params = await self._fit_sabr_model(log_moneyness, ivs)
             elif self.model_type == "svi":
@@ -548,19 +548,19 @@ class VolatilitySmileModel:
             else:
                 smile_params = await self._fit_polynomial_model(log_moneyness, ivs)
             
-            # Создание interpolator
+            # Create interpolator
             iv_interpolator = self._create_interpolator(strikes, ivs, smile_params)
             
-            # Метрики качества
+            # Quality metrics
             predicted_ivs = iv_interpolator(strikes)
             r_squared = 1 - np.sum((ivs - predicted_ivs)**2) / np.sum((ivs - np.mean(ivs))**2)
             rmse = np.sqrt(np.mean((ivs - predicted_ivs)**2))
             
-            # ATM volatility и параметры smile
+            # ATM volatility and smile parameters
             atm_strike = underlying_price
             atm_iv = float(iv_interpolator(atm_strike))
             
-            # Skew и kurtosis
+            # Skew and kurtosis
             skew = self._calculate_skew(strikes, ivs, underlying_price)
             kurtosis = self._calculate_kurtosis(strikes, ivs, underlying_price)
             
@@ -600,14 +600,14 @@ class VolatilitySmileModel:
         log_moneyness: np.ndarray, 
         ivs: np.ndarray
     ) -> Dict[str, float]:
-        """Подгонка SABR модели"""
+        """Fit SABR model"""
         
         def sabr_iv(log_k, alpha, beta, rho, nu):
             """SABR implied volatility approximation"""
             if len(log_k) == 0:
                 return np.array([])
                 
-            # Simplified SABR approximation для ATM
+            # Simplified SABR approximation for ATM
             f_k_avg = np.exp(log_k / 2)  # Geometric average
             
             # SABR formula (simplified)
@@ -616,7 +616,7 @@ class VolatilitySmileModel:
             
             sabr_vol = numerator / denominator
             
-            # Adjustments для skew (rho) и vol-of-vol (nu)
+            # Adjustments for skew (rho) and vol-of-vol (nu)
             skew_adj = (rho * beta * nu * alpha / 4) * log_k
             vol_vol_adj = (2 - 3 * rho**2) * nu**2 / 24
             
@@ -666,7 +666,7 @@ class VolatilitySmileModel:
         log_moneyness: np.ndarray,
         ivs: np.ndarray
     ) -> Dict[str, float]:
-        """Подгонка SVI (Stochastic Volatility Inspired) модели"""
+        """Fit SVI (Stochastic Volatility Inspired) model"""
         
         def svi_iv(log_k, a, b, rho, m, sigma):
             """SVI parametrization"""
@@ -717,7 +717,7 @@ class VolatilitySmileModel:
         log_moneyness: np.ndarray,
         ivs: np.ndarray
     ) -> Dict[str, float]:
-        """Подгонка полиномиальной модели"""
+        """Fit polynomial model"""
         
         # 2nd order polynomial: IV = a + b*k + c*k^2
         X = np.vstack([np.ones(len(log_moneyness)), log_moneyness, log_moneyness**2]).T
@@ -744,7 +744,7 @@ class VolatilitySmileModel:
         ivs: np.ndarray,
         params: Dict[str, float]
     ) -> Callable:
-        """Создание interpolation функции"""
+        """Create interpolation function"""
         
         if params["model"] == "polynomial":
             def poly_interpolator(k):
@@ -775,9 +775,9 @@ class VolatilitySmileModel:
         ivs: np.ndarray,
         underlying_price: float
     ) -> float:
-        """Расчет volatility skew"""
+        """Calculate volatility skew"""
         
-        # Find strikes близкие к ATM
+        # Find strikes close to ATM
         atm_idx = np.argmin(np.abs(strikes - underlying_price))
         
         if len(strikes) < 3:
@@ -807,7 +807,7 @@ class VolatilitySmileModel:
         ivs: np.ndarray,
         underlying_price: float
     ) -> float:
-        """Расчет volatility kurtosis (convexity)"""
+        """Calculate volatility kurtosis (convexity)"""
         
         if len(strikes) < 3:
             return 0.0
@@ -828,13 +828,13 @@ class VolatilitySmileModel:
         underlying_price: float,
         time_to_expiry: float
     ) -> Tuple[float, float]:
-        """Расчет risk-neutral skewness и kurtosis"""
+        """Calculate risk-neutral skewness and kurtosis"""
         
         if len(strikes) < 5:
             return 0.0, 3.0  # Default normal distribution moments
         
         try:
-            # Создаем более плотную сетку страйков для интеграции
+            # Create a denser strike grid for integration
             k_min, k_max = strikes.min(), strikes.max()
             k_dense = np.linspace(k_min, k_max, 100)
             
@@ -842,7 +842,7 @@ class VolatilitySmileModel:
             iv_interp = interpolate.interp1d(strikes, ivs, kind='cubic', fill_value='extrapolate')
             iv_dense = iv_interp(k_dense)
             
-            # Call prices для всех страйков
+            # Call prices for all strikes
             call_prices = []
             for k, iv in zip(k_dense, iv_dense):
                 price = black_scholes_price(
@@ -852,7 +852,7 @@ class VolatilitySmileModel:
             
             call_prices = np.array(call_prices)
             
-            # Numerical derivatives для risk-neutral density
+            # Numerical derivatives for risk-neutral density
             dk = k_dense[1] - k_dense[0]
             first_deriv = np.gradient(call_prices, dk)
             second_deriv = np.gradient(first_deriv, dk)
@@ -860,15 +860,15 @@ class VolatilitySmileModel:
             # Risk-neutral density: q(K) = exp(r*T) * d²C/dK²
             risk_neutral_density = second_deriv  # Simplified (r=0)
             
-            # Нормализация density
+            # Normalize density
             density_sum = np.sum(risk_neutral_density) * dk
             if density_sum > 0:
                 risk_neutral_density = risk_neutral_density / density_sum
             
-            # Центральные моменты
+            # Central moments
             mean_k = np.sum(k_dense * risk_neutral_density) * dk
             
-            # Скорректированные моменты
+            # Adjusted moments
             centered_k = k_dense - mean_k
             variance = np.sum(centered_k**2 * risk_neutral_density) * dk
             
@@ -890,9 +890,9 @@ class CryptoVolatilityIndexCalculator:
     """
     Crypto Volatility Index Calculator (VIX-style)
     
-    Рассчитывает volatility index на базе options prices,
-    аналогично VIX для stock markets. Для криптовалют адаптирован
-    под специфику рынка и доступность опционных данных.
+    Calculates volatility index based on options prices,
+    similar to VIX for stock markets. Adapted for cryptocurrencies
+    considering market specifics and options data availability.
     """
     
     def __init__(self, symbol: str):
@@ -908,12 +908,12 @@ class CryptoVolatilityIndexCalculator:
         risk_free_rate: float = 0.0
     ) -> CryptoVolatilityIndex:
         """
-        Расчет crypto volatility index
+        Calculate crypto volatility index
         
         Args:
-            options_data: Список всех доступных опционов
-            target_days: Целевые сроки (дни до экспирации)
-            risk_free_rate: Безрисковая ставка
+            options_data: List of all available options
+            target_days: Target terms (days to expiry)
+            risk_free_rate: Risk-free rate
         """
         try:
             logger.info(f"🔄 Calculating volatility index for {self.symbol}...")
@@ -921,7 +921,7 @@ class CryptoVolatilityIndexCalculator:
             if len(options_data) < 5:
                 raise ValueError("Insufficient options data for VIX calculation")
             
-            # Группировка по экспирациям
+            # Group by expiries
             expiry_groups = {}
             for option in options_data:
                 expiry_key = option.expiry.date()
@@ -929,7 +929,7 @@ class CryptoVolatilityIndexCalculator:
                     expiry_groups[expiry_key] = []
                 expiry_groups[expiry_key].append(option)
             
-            # Расчет для каждой экспирации
+            # Calculate for each expiry
             expiry_volatilities = {}
             
             for expiry_date, expiry_options in expiry_groups.items():
@@ -946,14 +946,14 @@ class CryptoVolatilityIndexCalculator:
             if len(expiry_volatilities) == 0:
                 raise ValueError("No valid expiry volatilities calculated")
             
-            # Интерполяция к целевым срокам
+            # Interpolate to target terms
             term_structure = {}
             
             for target_days_val in target_days:
                 if target_days_val in expiry_volatilities:
                     term_structure[f"{target_days_val}D"] = expiry_volatilities[target_days_val]
                 else:
-                    # Интерполяция
+                    # Interpolation
                     days_list = sorted(expiry_volatilities.keys())
                     vols_list = [expiry_volatilities[d] for d in days_list]
                     
@@ -961,24 +961,24 @@ class CryptoVolatilityIndexCalculator:
                         interpolated = np.interp(target_days_val, days_list, vols_list)
                         term_structure[f"{target_days_val}D"] = interpolated
             
-            # Основной index (30-дневный)
+            # Main index (30-day)
             main_vol_index = term_structure.get("30D", list(expiry_volatilities.values())[0])
             
-            # Определение режима волатильности
+            # Determine volatility regime
             regime = self._determine_volatility_regime(main_vol_index)
             
-            # Near/next term (если доступны)
+            # Near/next term (if available)
             sorted_days = sorted(expiry_volatilities.keys())
             near_term_vol = expiry_volatilities[sorted_days[0]] if sorted_days else main_vol_index
             next_term_vol = expiry_volatilities[sorted_days[1]] if len(sorted_days) > 1 else near_term_vol
             
-            # Раздельные расчеты для calls/puts
+            # Separate calculations for calls/puts
             call_vol, put_vol = await self._calculate_call_put_indices(options_data)
             
-            # Качество данных
+            # Data quality
             data_quality = self._assess_data_quality(options_data)
             
-            # Исторические перцентили
+            # Historical percentiles
             percentiles = await self._calculate_historical_percentiles(main_vol_index)
             
             crypto_vix = CryptoVolatilityIndex(
@@ -1019,14 +1019,14 @@ class CryptoVolatilityIndexCalculator:
         """
         Model-free implied volatility calculation
         
-        Использует весь спектр страйков для расчета volatility
-        без предположений о конкретной модели ценообразования.
+        Uses the full spectrum of strikes to calculate volatility
+        without assumptions about a specific pricing model.
         """
         
         if len(expiry_options) < 3:
             raise ValueError("Insufficient options for model-free calculation")
         
-        # Группировка по страйкам
+        # Group by strikes
         strike_data = {}
         underlying_price = expiry_options[0].underlying_price
         time_to_expiry = expiry_options[0].time_to_expiry
@@ -1057,7 +1057,7 @@ class CryptoVolatilityIndexCalculator:
         else:
             forward_price = underlying_price
         
-        # Выбор ATM страйка
+        # Select ATM strike
         strikes = list(strike_data.keys())
         atm_strike = min(strikes, key=lambda k: abs(k - forward_price))
         
@@ -1070,14 +1070,14 @@ class CryptoVolatilityIndexCalculator:
         for i, strike in enumerate(sorted_strikes):
             options = strike_data[strike]
             
-            # Выбор опциона (call или put в зависимости от moneyness)
+            # Select option (call or put depending on moneyness)
             if strike < atm_strike:
                 # OTM puts
                 option = options["put"]
                 if not option:
                     continue
             else:
-                # ATM и OTM calls
+                # ATM and OTM calls
                 option = options["call"] 
                 if not option:
                     option = options["put"]  # Fallback
@@ -1100,7 +1100,7 @@ class CryptoVolatilityIndexCalculator:
         if total_weight == 0:
             raise ValueError("No valid contributions to model-free variance")
         
-        # Центральный member adjustment
+        # Central member adjustment
         central_term = (forward_price / atm_strike - 1)**2 / time_to_expiry
         
         model_free_variance = variance_contribution - central_term
@@ -1109,9 +1109,9 @@ class CryptoVolatilityIndexCalculator:
         return model_free_volatility
 
     def _determine_volatility_regime(self, vol_index: float) -> VolatilityRegime:
-        """Определение режима волатильности"""
+        """Determine volatility regime"""
         
-        # Пороги для криптовалют (выше чем для traditional assets)
+        # Thresholds for cryptocurrencies (higher than for traditional assets)
         if vol_index < 0.3:  # 30%
             return VolatilityRegime.LOW
         elif vol_index < 0.6:  # 60%
@@ -1125,7 +1125,7 @@ class CryptoVolatilityIndexCalculator:
         self,
         options_data: List[OptionData]
     ) -> Tuple[float, float]:
-        """Раздельные indices для calls и puts"""
+        """Separate indices for calls and puts"""
         
         calls = [opt for opt in options_data if opt.option_type == OptionType.CALL]
         puts = [opt for opt in options_data if opt.option_type == OptionType.PUT]
@@ -1143,19 +1143,19 @@ class CryptoVolatilityIndexCalculator:
         return call_vol, put_vol
 
     def _assess_data_quality(self, options_data: List[OptionData]) -> float:
-        """Оценка качества опционных данных"""
+        """Assess options data quality"""
         
         quality_scores = []
         
-        # 1. Coverage (покрытие страйков)
+        # 1. Coverage (strike coverage)
         strikes = [opt.strike for opt in options_data]
         underlying_price = options_data[0].underlying_price
         
         strike_range = max(strikes) - min(strikes)
-        coverage_score = min(1.0, strike_range / underlying_price)  # Нормализация
+        coverage_score = min(1.0, strike_range / underlying_price)  # Normalization
         quality_scores.append(coverage_score)
         
-        # 2. Liquidity (volume/OI если доступны)
+        # 2. Liquidity (volume/OI if available)
         liquidity_scores = []
         for opt in options_data:
             if opt.volume is not None and opt.open_interest is not None:
@@ -1184,34 +1184,34 @@ class CryptoVolatilityIndexCalculator:
         self,
         current_vol: float
     ) -> Dict[str, float]:
-        """Расчет исторических перцентилей"""
+        """Calculate historical percentiles"""
         
-        # В реальной реализации здесь будет обращение к базе данных
-        # Для демонстрации возвращаем mock значения
+        # In a real implementation this would query the database
+        # For demonstration we return mock values
         
         historical_vols = [vol.volatility_index for vol in self.calculation_history[-252:]]  # Last year
         
         if len(historical_vols) < 10:
             return {"1m": 50.0, "3m": 50.0, "1y": 50.0}
         
-        # Перцентили
+        # Percentiles
         percentiles = {}
         
-        # 1 месяц
+        # 1 month
         recent_1m = [vol.volatility_index for vol in self.calculation_history[-30:]]
         if recent_1m:
             percentiles["1m"] = (np.sum(np.array(recent_1m) < current_vol) / len(recent_1m)) * 100
         else:
             percentiles["1m"] = 50.0
         
-        # 3 месяца
+        # 3 months
         recent_3m = [vol.volatility_index for vol in self.calculation_history[-90:]]
         if recent_3m:
             percentiles["3m"] = (np.sum(np.array(recent_3m) < current_vol) / len(recent_3m)) * 100
         else:
             percentiles["3m"] = 50.0
         
-        # 1 год
+        # 1 year
         if historical_vols:
             percentiles["1y"] = (np.sum(np.array(historical_vols) < current_vol) / len(historical_vols)) * 100
         else:
@@ -1220,7 +1220,7 @@ class CryptoVolatilityIndexCalculator:
         return percentiles
 
     def generate_vix_report(self, crypto_vix: CryptoVolatilityIndex) -> str:
-        """Генерация отчета по Crypto VIX"""
+        """Generate Crypto VIX report"""
         
         report = f"""
 🎯 Crypto Volatility Index Report for {self.symbol}
@@ -1252,7 +1252,7 @@ Interpretation:
         return report
 
     def _interpret_vix_level(self, crypto_vix: CryptoVolatilityIndex) -> str:
-        """Интерпретация уровня VIX"""
+        """Interpret VIX level"""
         
         level = crypto_vix.volatility_index
         
@@ -1265,7 +1265,7 @@ Interpretation:
         else:
             return "- Extreme volatility\n- Crisis-level fear\n- Consider defensive positioning"
 
-# Export всех классов
+# Export all classes
 __all__ = [
     "OptionType",
     "VolatilityRegime",

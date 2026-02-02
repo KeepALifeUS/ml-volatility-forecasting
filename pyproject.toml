@@ -32,7 +32,7 @@ classifiers = [
 ]
 requires-python = ">=3.9"
 dependencies = [
-    # GARCH model library (основная для GARCH моделирования)
+    # GARCH model library
     "arch>=6.2.0",
     
     # Core data processing
@@ -48,7 +48,7 @@ dependencies = [
     
     # Statistical analysis  
     "statsmodels>=0.14.0",
-    "pykalman>=0.9.7",  # Kalman filtering для стохастических моделей
+    "pykalman>=0.9.7",  # Kalman filtering for stochastic models
     
     # API framework
     "fastapi>=0.104.0",
@@ -68,7 +68,7 @@ dependencies = [
     "redis>=5.0.0",
     "psycopg2-binary>=2.9.0",
     "sqlalchemy>=2.0.0",
-    "clickhouse-driver>=0.2.6",  # Для высокочастотных данных
+    "clickhouse-driver>=0.2.6",  # For high-frequency data
     
     # Visualization
     "plotly>=5.17.0",
@@ -77,14 +77,14 @@ dependencies = [
     
     # Financial data
     "yfinance>=0.2.0",
-    "ccxt>=4.1.0",  # Криптобиржи
-    "pandas-ta>=0.3.14b",  # Технический анализ
+    "ccxt>=4.1.0",  # Crypto exchanges
+    "pandas-ta>=0.3.14b",  # Technical analysis
     
     # Utilities
     "python-dateutil>=2.8.0",
     "pytz>=2023.3",
     "requests>=2.31.0",
-    "numba>=0.58.0",  # JIT compilation для производительности
+    "numba>=0.58.0",  # JIT compilation for performance
     
     # Monitoring
     "prometheus-client>=0.19.0",
@@ -114,7 +114,7 @@ docs = [
     "myst-parser>=2.0.0"
 ]
 gpu = [
-    "cupy-cuda12x>=12.0.0",  # GPU acceleration для NumPy
+    "cupy-cuda12x>=12.0.0",  # GPU acceleration for NumPy
     "tensorflow-gpu>=2.13.0"
 ]
 quant = [
@@ -141,7 +141,7 @@ where = ["src"]
 [tool.setuptools.package-data]
 "ml_volatility_forecasting" = ["config/*.yaml", "models/*.pkl", "data/*.csv"]
 
-# Качество кода
+# Code quality
 [tool.black]
 line-length = 88
 target-version = ['py39', 'py310', 'py311']

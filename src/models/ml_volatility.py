@@ -1,18 +1,18 @@
 """
-Machine Learning Volatility Models для Advanced Forecasting
+Machine Learning Volatility Models for Advanced Forecasting
 
-Реализация state-of-the-art ML models:
-- LSTM для volatility forecasting с attention mechanisms
-- HAR-RV (Heterogeneous Autoregressive) для realized volatility
-- Random Forest для feature-based volatility prediction
-- Ensemble methods для robustness
-- Transformer models для long-term dependencies
+Implementation of state-of-the-art ML models:
+- LSTM for volatility forecasting with attention mechanisms
+- HAR-RV (Heterogeneous Autoregressive) for realized volatility
+- Random Forest for feature-based volatility prediction
+- Ensemble methods for robustness
+- Transformer models for long-term dependencies
 - Regime-switching neural networks
 
 Features:
 - GPU acceleration support
 - Real-time inference optimization
-- Model versioning и A/B testing
+- Model versioning and A/B testing
 - Hyperparameter optimization
 - Production-ready deployment
 """
@@ -58,31 +58,31 @@ except ImportError:
     TORCH_AVAILABLE = False
     logger.warning("⚠️ PyTorch not available, some models disabled")
 
-# Настройка логирования
+# Logging configuration
 logger = logging.getLogger(__name__)
 warnings.filterwarnings('ignore', category=UserWarning)
 
 @dataclass
 class MLVolatilityPrediction:
-    """Результат ML prediction волатильности"""
+    """ML volatility prediction result"""
     symbol: str
     timestamp: datetime
     model_name: str
     
-    # Прогнозы
+    # Forecasts
     volatility_forecast: np.ndarray
     confidence_intervals: Dict[float, Tuple[np.ndarray, np.ndarray]]
     forecast_horizon: int
     
-    # Метрики модели
+    # Model metrics
     model_score: float
     feature_importance: Dict[str, float]
     prediction_uncertainty: float
     
-    # Качество прогноза
+    # Forecast quality
     forecast_quality: Dict[str, float]
     
-    # Метаданные
+    # Metadata
     model_version: str
     features_used: List[str]
     training_period: Tuple[datetime, datetime]
@@ -90,7 +90,7 @@ class MLVolatilityPrediction:
 
 @dataclass
 class ModelPerformanceMetrics:
-    """Метрики производительности ML модели"""
+    """ML model performance metrics"""
     model_name: str
     symbol: str
     evaluation_period: Tuple[datetime, datetime]
@@ -119,7 +119,7 @@ class ModelPerformanceMetrics:
 
 @jit(nopython=True)
 def _calculate_qlike_loss_numba(y_true: np.ndarray, y_pred: np.ndarray) -> float:
-    """Быстрый расчет QLIKE loss с Numba"""
+    """Fast QLIKE loss calculation with Numba"""
     n = len(y_true)
     loss = 0.0
     
@@ -130,7 +130,7 @@ def _calculate_qlike_loss_numba(y_true: np.ndarray, y_pred: np.ndarray) -> float
     return loss / n
 
 class BaseMLVolatilityModel(ABC):
-    """Базовый класс для ML volatility models"""
+    """Base class for ML volatility models"""
     
     def __init__(self, symbol: str, name: str, model_version: str = "1.0"):
         self.symbol = symbol
@@ -153,7 +153,7 @@ class BaseMLVolatilityModel(ABC):
         validation_split: float = 0.2,
         **kwargs
     ) -> "BaseMLVolatilityModel":
-        """Обучение модели"""
+        """Train the model"""
         pass
 
     @abstractmethod
@@ -163,7 +163,7 @@ class BaseMLVolatilityModel(ABC):
         horizon: int = 1,
         return_uncertainty: bool = True
     ) -> MLVolatilityPrediction:
-        """Предсказание волатильности"""
+        """Predict volatility"""
         pass
 
     def _prepare_features(
@@ -172,7 +172,7 @@ class BaseMLVolatilityModel(ABC):
         volatility_data: Optional[pd.Series] = None,
         lookback_window: int = 20
     ) -> pd.DataFrame:
-        """Подготовка признаков для ML модели"""
+        """Prepare features for ML model"""
         
         features = pd.DataFrame(index=price_data.index)
         
@@ -231,7 +231,7 @@ class BaseMLVolatilityModel(ABC):
             features['volume_ma'] = price_data['volume'].rolling(lookback_window).mean()
             features['price_volume'] = prices * price_data['volume']
         
-        # Remove NaN и infinite values
+        # Remove NaN and infinite values
         features = features.replace([np.inf, -np.inf], np.nan)
         features = features.fillna(method='ffill').fillna(0)
         
@@ -240,7 +240,7 @@ class BaseMLVolatilityModel(ABC):
         return features
 
     def _calculate_rsi(self, prices: pd.Series, window: int = 14) -> pd.Series:
-        """Расчет RSI"""
+        """Calculate RSI"""
         delta = prices.diff()
         gain = delta.where(delta > 0, 0)
         loss = -delta.where(delta < 0, 0)
@@ -294,11 +294,11 @@ class BaseMLVolatilityModel(ABC):
         returns: pd.Series, 
         window: int = 20
     ) -> pd.Series:
-        """Идентификация режима волатильности"""
+        """Identify volatility regime"""
         rolling_vol = returns.rolling(window).std()
         vol_percentile = rolling_vol.rolling(252).rank(pct=True)  # Percentile over 1 year
         
-        # Режимы: 0 = низкая, 1 = средняя, 2 = высокая волатильность
+        # Regimes: 0 = low, 1 = medium, 2 = high volatility
         regime = pd.Series(1, index=returns.index)  # Default: medium
         regime[vol_percentile < 0.33] = 0  # Low vol
         regime[vol_percentile > 0.67] = 2  # High vol
@@ -329,7 +329,7 @@ class BaseMLVolatilityModel(ABC):
         returns: pd.Series, 
         threshold: float = 3.0
     ) -> pd.Series:
-        """Детекция price jumps"""
+        """Detect price jumps"""
         
         # Z-score of returns
         rolling_mean = returns.rolling(20).mean()
@@ -342,28 +342,28 @@ class BaseMLVolatilityModel(ABC):
         return jump_indicator
 
     def _calculate_feature_importance(self) -> Dict[str, float]:
-        """Расчет важности признаков"""
+        """Calculate feature importance"""
         if not self.is_fitted:
             return {}
         
         importance_dict = {}
         
-        # Для scikit-learn models
+        # For scikit-learn models
         if hasattr(self.model, 'feature_importances_'):
             importances = self.model.feature_importances_
             for i, col in enumerate(self.feature_columns):
                 importance_dict[col] = float(importances[i])
         
-        # Для neural networks - используем permutation importance (упрощенно)
+        # For neural networks - use permutation importance (simplified)
         else:
-            # Mock importance для neural networks
+            # Mock importance for neural networks
             for col in self.feature_columns:
                 importance_dict[col] = 1.0 / len(self.feature_columns)
         
         return importance_dict
 
     def save_model(self, filepath: str) -> None:
-        """Сохранение модели"""
+        """Save model"""
         model_data = {
             'model': self.model,
             'scaler': self.scaler,
@@ -380,7 +380,7 @@ class BaseMLVolatilityModel(ABC):
         logger.info(f"✅ Model saved to {filepath}")
 
     def load_model(self, filepath: str) -> None:
-        """Загрузка модели"""
+        """Load model"""
         with open(filepath, 'rb') as f:
             model_data = pickle.load(f)
         
@@ -394,11 +394,11 @@ class BaseMLVolatilityModel(ABC):
 
 class LSTMVolatilityModel(BaseMLVolatilityModel):
     """
-    LSTM Neural Network для Volatility Forecasting
-    
-    Deep learning модель с attention mechanisms для capture
-    long-term dependencies в volatility patterns.
-    Оптимизирована для crypto markets с высокой волатильностью.
+    LSTM Neural Network for Volatility Forecasting
+
+    Deep learning model with attention mechanisms to capture
+    long-term dependencies in volatility patterns.
+    Optimized for crypto markets with high volatility.
     """
     
     def __init__(
@@ -427,14 +427,14 @@ class LSTMVolatilityModel(BaseMLVolatilityModel):
         batch_size: int = 32,
         **kwargs
     ) -> "LSTMVolatilityModel":
-        """Обучение LSTM модели"""
+        """Train LSTM model"""
         try:
             logger.info(f"🔄 Training LSTM model for {self.symbol}...")
             
-            # Подготовка данных
+            # Prepare data
             X_scaled, y_scaled = self._prepare_lstm_data(X, y)
-            
-            # Создание sequences
+
+            # Create sequences
             X_sequences, y_sequences = self._create_sequences(X_scaled, y_scaled)
             
             # Train/validation split
@@ -443,7 +443,7 @@ class LSTMVolatilityModel(BaseMLVolatilityModel):
             X_train, X_val = X_sequences[:split_idx], X_sequences[split_idx:]
             y_train, y_val = y_sequences[:split_idx], y_sequences[split_idx:]
             
-            # Создание модели
+            # Create model
             self.model = self._build_lstm_model(X_train.shape[1], X_train.shape[2])
             
             # Callbacks
@@ -452,7 +452,7 @@ class LSTMVolatilityModel(BaseMLVolatilityModel):
                 ReduceLROnPlateau(patience=5, factor=0.5)
             ]
             
-            # Обучение
+            # Training
             start_time = datetime.now()
             
             history = self.model.fit(
@@ -466,7 +466,7 @@ class LSTMVolatilityModel(BaseMLVolatilityModel):
             
             training_time = (datetime.now() - start_time).total_seconds()
             
-            # Сохранение истории
+            # Save history
             self.training_history.append({
                 'timestamp': datetime.now(),
                 'epochs_completed': len(history.history['loss']),
@@ -489,13 +489,13 @@ class LSTMVolatilityModel(BaseMLVolatilityModel):
         X: pd.DataFrame, 
         y: pd.Series
     ) -> Tuple[np.ndarray, np.ndarray]:
-        """Подготовка данных для LSTM"""
+        """Prepare data for LSTM"""
         
         # Scaling features
         self.scaler = StandardScaler()
         X_scaled = self.scaler.fit_transform(X)
         
-        # Target scaling (log transform для volatility)
+        # Target scaling (log transform for volatility)
         y_log = np.log(y + 1e-8)  # Avoid log(0)
         self.target_scaler = StandardScaler()
         y_scaled = self.target_scaler.fit_transform(y_log.values.reshape(-1, 1)).flatten()
@@ -507,7 +507,7 @@ class LSTMVolatilityModel(BaseMLVolatilityModel):
         X: np.ndarray, 
         y: np.ndarray
     ) -> Tuple[np.ndarray, np.ndarray]:
-        """Создание sequences для LSTM"""
+        """Create sequences for LSTM"""
         
         X_sequences = []
         y_sequences = []
@@ -519,7 +519,7 @@ class LSTMVolatilityModel(BaseMLVolatilityModel):
         return np.array(X_sequences), np.array(y_sequences)
 
     def _build_lstm_model(self, timesteps: int, features: int) -> tf.keras.Model:
-        """Построение LSTM архитектуры"""
+        """Build LSTM architecture"""
         
         inputs = tf.keras.Input(shape=(timesteps, features))
         
@@ -557,12 +557,12 @@ class LSTMVolatilityModel(BaseMLVolatilityModel):
         horizon: int = 1,
         return_uncertainty: bool = True
     ) -> MLVolatilityPrediction:
-        """Предсказание с LSTM"""
+        """Predict with LSTM"""
         if not self.is_fitted:
             raise ValueError("Model must be fitted before prediction")
         
         try:
-            # Подготовка данных
+            # Prepare data
             X_scaled = self.scaler.transform(X)
             X_sequences, _ = self._create_sequences(X_scaled, np.zeros(len(X_scaled)))
             
@@ -574,17 +574,17 @@ class LSTMVolatilityModel(BaseMLVolatilityModel):
             current_sequence = X_sequences[-1:].copy()
             
             for step in range(horizon):
-                # Предсказание следующего значения
+                # Predict next value
                 pred_scaled = self.model.predict(current_sequence, verbose=0)
                 
-                # Обратное масштабирование
+                # Inverse scaling
                 pred_log = self.target_scaler.inverse_transform(pred_scaled.reshape(-1, 1))
                 pred_vol = np.exp(pred_log) - 1e-8
                 forecasts.append(pred_vol[0, 0])
                 
-                # Update sequence для следующего шага
+                # Update sequence for next step
                 if step < horizon - 1:
-                    # Используем предсказание как input для следующего шага
+                    # Use prediction as input for the next step
                     new_features = np.zeros((1, 1, X_scaled.shape[1]))
                     new_features[0, 0, 0] = pred_scaled[0, 0]  # Simplified update
                     
@@ -600,7 +600,7 @@ class LSTMVolatilityModel(BaseMLVolatilityModel):
             if return_uncertainty and horizon == 1:
                 uncertainty = await self._estimate_prediction_uncertainty(X_sequences[-1:])
             
-            # Confidence intervals (простое приближение)
+            # Confidence intervals (simple approximation)
             confidence_intervals = {}
             std_error = uncertainty if uncertainty > 0 else forecasts.std() * 0.1
             
@@ -613,7 +613,7 @@ class LSTMVolatilityModel(BaseMLVolatilityModel):
             # Feature importance
             feature_importance = self._calculate_feature_importance()
             
-            # Model score (последняя validation loss)
+            # Model score (latest validation loss)
             model_score = (1.0 / (1.0 + self.training_history[-1]['final_val_loss'])) \
                          if self.training_history else 0.5
             
@@ -655,13 +655,13 @@ class LSTMVolatilityModel(BaseMLVolatilityModel):
         X_sequence: np.ndarray,
         n_samples: int = 100
     ) -> float:
-        """Monte Carlo dropout для uncertainty estimation"""
+        """Monte Carlo dropout for uncertainty estimation"""
         
-        # Включаем dropout во время inference
+        # Enable dropout during inference
         predictions = []
         
         for _ in range(n_samples):
-            # Predict с dropout enabled
+            # Predict with dropout enabled
             pred = self.model(X_sequence, training=True)
             pred_scaled = self.target_scaler.inverse_transform(pred.numpy().reshape(-1, 1))
             pred_vol = np.exp(pred_scaled) - 1e-8
@@ -674,9 +674,9 @@ class HARRVModel(BaseMLVolatilityModel):
     """
     Heterogeneous Autoregressive Realized Volatility (HAR-RV)
     
-    Классическая модель для прогнозирования realized volatility
-    с компонентами daily, weekly, monthly агрегации.
-    Extended с ML features для улучшения производительности.
+    Classic model for realized volatility forecasting
+    with daily, weekly, monthly aggregation components.
+    Extended with ML features for improved performance.
     """
     
     def __init__(self, symbol: str, use_ml_extensions: bool = True):
@@ -690,21 +690,21 @@ class HARRVModel(BaseMLVolatilityModel):
         validation_split: float = 0.2,
         **kwargs
     ) -> "HARRVModel":
-        """Обучение HAR-RV модели"""
+        """Train HAR-RV model"""
         try:
             logger.info(f"🔄 Training HAR-RV model for {self.symbol}...")
             
             # HAR features preparation
             har_features = self._prepare_har_features(X, y)
             
-            # Добавление ML extensions
+            # Add ML extensions
             if self.use_ml_extensions:
                 ml_features = self._prepare_ml_extensions(X, y)
                 features = pd.concat([har_features, ml_features], axis=1)
             else:
                 features = har_features
             
-            # Удаление NaN
+            # Remove NaN
             combined_data = pd.concat([features, y], axis=1).dropna()
             if len(combined_data) < 50:
                 raise ValueError("Insufficient data after cleanup")
@@ -725,7 +725,7 @@ class HARRVModel(BaseMLVolatilityModel):
             
             # Model selection
             if self.use_ml_extensions:
-                # Gradient Boosting для ML-enhanced HAR-RV
+                # Gradient Boosting for ML-enhanced HAR-RV
                 self.model = GradientBoostingRegressor(
                     n_estimators=100,
                     learning_rate=0.1,
@@ -734,11 +734,11 @@ class HARRVModel(BaseMLVolatilityModel):
                     random_state=42
                 )
             else:
-                # Linear regression для classical HAR-RV
+                # Linear regression for classical HAR-RV
                 from sklearn.linear_model import LinearRegression
                 self.model = LinearRegression()
             
-            # Обучение
+            # Training
             start_time = datetime.now()
             self.model.fit(X_train_scaled, y_train)
             training_time = (datetime.now() - start_time).total_seconds()
@@ -770,7 +770,7 @@ class HARRVModel(BaseMLVolatilityModel):
         X: pd.DataFrame, 
         y: pd.Series
     ) -> pd.DataFrame:
-        """Подготовка классических HAR признаков"""
+        """Prepare classic HAR features"""
         
         har_features = pd.DataFrame(index=y.index)
         
@@ -795,7 +795,7 @@ class HARRVModel(BaseMLVolatilityModel):
         X: pd.DataFrame, 
         y: pd.Series
     ) -> pd.DataFrame:
-        """ML расширения для HAR-RV"""
+        """ML extensions for HAR-RV"""
         
         ml_features = pd.DataFrame(index=y.index)
         
@@ -829,12 +829,12 @@ class HARRVModel(BaseMLVolatilityModel):
         horizon: int = 1,
         return_uncertainty: bool = True
     ) -> MLVolatilityPrediction:
-        """HAR-RV прогнозирование"""
+        """HAR-RV forecasting"""
         if not self.is_fitted:
             raise ValueError("Model must be fitted before prediction")
         
         try:
-            # Получение последних значений для HAR features
+            # Get latest values for HAR features
             if 'realized_volatility' in X.columns:
                 y_hist = X['realized_volatility']
             else:
@@ -876,7 +876,7 @@ class HARRVModel(BaseMLVolatilityModel):
                 pred = max(0, pred)
                 forecasts.append(pred)
                 
-                # Update y_hist для следующего шага
+                # Update y_hist for next step
                 if step < horizon - 1:
                     new_index = current_y.index[-1] + pd.Timedelta(days=1)
                     current_y.loc[new_index] = pred
@@ -885,9 +885,9 @@ class HARRVModel(BaseMLVolatilityModel):
             
             # Confidence intervals
             if hasattr(self.model, 'predict'):
-                # Для ensemble models - можно оценить uncertainty
+                # For ensemble models - can estimate uncertainty
                 if hasattr(self.model, 'estimators_'):
-                    # Bootstrap predictions для uncertainty
+                    # Bootstrap predictions for uncertainty
                     n_estimators = len(self.model.estimators_)
                     bootstrap_preds = []
                     
@@ -948,13 +948,13 @@ class HARRVModel(BaseMLVolatilityModel):
             raise
 
     def _assess_har_strength(self, feature_importance: Dict[str, float]) -> float:
-        """Оценка силы HAR компонентов"""
+        """Assess HAR component strength"""
         har_features = ['rv_daily', 'rv_weekly', 'rv_monthly']
         har_importance = sum(feature_importance.get(f, 0) for f in har_features)
         return min(1.0, har_importance)
 
     def _assess_ml_contribution(self, feature_importance: Dict[str, float]) -> float:
-        """Оценка вклада ML расширений"""
+        """Assess ML extensions contribution"""
         if not self.use_ml_extensions:
             return 0.0
         
@@ -966,10 +966,10 @@ class HARRVModel(BaseMLVolatilityModel):
 
 class RandomForestVolatility(BaseMLVolatilityModel):
     """
-    Random Forest для Volatility Prediction
-    
-    Ensemble модель с feature selection и hyperparameter optimization.
-    Robust к outliers и effective для non-linear patterns в crypto volatility.
+    Random Forest for Volatility Prediction
+
+    Ensemble model with feature selection and hyperparameter optimization.
+    Robust to outliers and effective for non-linear patterns in crypto volatility.
     """
     
     def __init__(
@@ -990,7 +990,7 @@ class RandomForestVolatility(BaseMLVolatilityModel):
         validation_split: float = 0.2,
         **kwargs
     ) -> "RandomForestVolatility":
-        """Обучение Random Forest модели"""
+        """Train Random Forest model"""
         try:
             logger.info(f"🔄 Training Random Forest model for {self.symbol}...")
             
@@ -1029,7 +1029,7 @@ class RandomForestVolatility(BaseMLVolatilityModel):
                     'max_features': 'sqrt'
                 }
             
-            # Обучение модели с лучшими параметрами
+            # Train model with best parameters
             start_time = datetime.now()
             
             self.model = RandomForestRegressor(
@@ -1073,7 +1073,7 @@ class RandomForestVolatility(BaseMLVolatilityModel):
         X_val: np.ndarray,
         y_val: pd.Series
     ) -> Dict[str, Any]:
-        """Оптимизация гиперпараметров с Optuna"""
+        """Hyperparameter optimization with Optuna"""
         
         def objective(trial):
             params = {
@@ -1089,7 +1089,7 @@ class RandomForestVolatility(BaseMLVolatilityModel):
                 model.fit(X_train, y_train)
                 y_pred = model.predict(X_val)
                 
-                # Минимизируем MSE
+                # Minimize MSE
                 mse = mean_squared_error(y_val, y_pred)
                 return mse
                 
@@ -1117,7 +1117,7 @@ class RandomForestVolatility(BaseMLVolatilityModel):
         horizon: int = 1,
         return_uncertainty: bool = True
     ) -> MLVolatilityPrediction:
-        """Random Forest прогнозирование"""
+        """Random Forest forecasting"""
         if not self.is_fitted:
             raise ValueError("Model must be fitted before prediction")
         
@@ -1134,7 +1134,7 @@ class RandomForestVolatility(BaseMLVolatilityModel):
             # Get latest complete features
             latest_features = features.iloc[-1:].dropna(axis=1)
             
-            # Align с training features
+            # Align with training features
             aligned_features = pd.DataFrame(0, index=[0], columns=self.feature_columns)
             for col in latest_features.columns:
                 if col in aligned_features.columns:
@@ -1153,7 +1153,7 @@ class RandomForestVolatility(BaseMLVolatilityModel):
                 pred = max(0, pred)  # Ensure positive volatility
                 forecasts.append(pred)
                 
-                # Update features для следующего шага (simplified)
+                # Update features for next step (simplified)
                 if step < horizon - 1 and 'rv_lag_1' in current_features.columns:
                     current_features['rv_lag_1'] = pred
                     if 'rv_weekly' in current_features.columns:
@@ -1162,10 +1162,10 @@ class RandomForestVolatility(BaseMLVolatilityModel):
             
             forecasts = np.array(forecasts)
             
-            # Uncertainty estimation из tree predictions
+            # Uncertainty estimation from tree predictions
             uncertainty = 0.0
             if return_uncertainty:
-                # Individual tree predictions для uncertainty
+                # Individual tree predictions for uncertainty
                 tree_predictions = []
                 for estimator in self.model.estimators_[:min(50, len(self.model.estimators_))]:
                     tree_pred = estimator.predict(X_scaled)[0]
@@ -1224,8 +1224,8 @@ class EnsembleVolatilityModel:
     """
     Ensemble Volatility Model
     
-    Комбинирует multiple ML models для robust volatility forecasting.
-    Использует weighted averaging на базе historical performance.
+    Combines multiple ML models for robust volatility forecasting.
+    Uses weighted averaging based on historical performance.
     """
     
     def __init__(self, symbol: str, models: List[BaseMLVolatilityModel] = None):
@@ -1237,7 +1237,7 @@ class EnsembleVolatilityModel:
         logger.info(f"🎯 Ensemble model initialized with {len(self.models)} base models")
 
     def add_model(self, model: BaseMLVolatilityModel) -> None:
-        """Добавление модели в ensemble"""
+        """Add model to ensemble"""
         self.models.append(model)
         logger.info(f"➕ Added {model.name} to ensemble")
 
@@ -1247,14 +1247,14 @@ class EnsembleVolatilityModel:
         y: pd.Series,
         validation_split: float = 0.2
     ) -> "EnsembleVolatilityModel":
-        """Обучение всех моделей в ensemble"""
+        """Train all models in ensemble"""
         
         if not self.models:
             raise ValueError("No models in ensemble")
         
         logger.info(f"🔄 Training ensemble with {len(self.models)} models...")
         
-        # Parallel training всех моделей
+        # Parallel training of all models
         training_tasks = []
         for model in self.models:
             task = model.fit(X, y, validation_split=validation_split)
@@ -1275,7 +1275,7 @@ class EnsembleVolatilityModel:
             if not self.models:
                 raise ValueError("All models failed to train")
             
-            # Расчет весов на основе performance
+            # Calculate weights based on performance
             await self._calculate_ensemble_weights(X, y, validation_split)
             
             logger.info(f"✅ Ensemble trained with {len(self.models)} models")
@@ -1291,7 +1291,7 @@ class EnsembleVolatilityModel:
         y: pd.Series,
         validation_split: float
     ) -> None:
-        """Расчет весов моделей на основе validation performance"""
+        """Calculate model weights based on validation performance"""
         
         split_idx = int(len(X) * (1 - validation_split))
         X_val = X.iloc[split_idx:]
@@ -1301,11 +1301,11 @@ class EnsembleVolatilityModel:
         
         for model in self.models:
             try:
-                # Получение прогнозов модели
+                # Get model predictions
                 prediction = await model.predict(X_val, horizon=1)
                 pred_values = prediction.volatility_forecast
                 
-                # Align predictions с validation targets
+                # Align predictions with validation targets
                 if len(pred_values) == 1:
                     pred_values = np.repeat(pred_values[0], len(y_val))
                 else:
@@ -1316,7 +1316,7 @@ class EnsembleVolatilityModel:
                 r2 = r2_score(y_val, pred_values[:len(y_val)])
                 
                 # Combined score (higher = better)
-                score = r2 - mse  # Можно настроить формулу
+                score = r2 - mse  # Formula can be tuned
                 model_scores[model.name] = max(0, score)
                 
             except Exception as e:
@@ -1339,7 +1339,7 @@ class EnsembleVolatilityModel:
         horizon: int = 1,
         return_uncertainty: bool = True
     ) -> MLVolatilityPrediction:
-        """Ensemble прогнозирование"""
+        """Ensemble forecasting"""
         
         if not self.models:
             raise ValueError("No trained models in ensemble")
@@ -1347,7 +1347,7 @@ class EnsembleVolatilityModel:
         try:
             logger.info(f"🔄 Generating ensemble prediction...")
             
-            # Получение прогнозов от всех моделей
+            # Get predictions from all models
             model_predictions = []
             prediction_tasks = []
             
@@ -1455,7 +1455,7 @@ class EnsembleVolatilityModel:
             raise
 
     def _calculate_diversity(self, predictions: List[MLVolatilityPrediction]) -> float:
-        """Расчет diversity среди моделей"""
+        """Calculate diversity among models"""
         if len(predictions) < 2:
             return 0.0
         
@@ -1465,7 +1465,7 @@ class EnsembleVolatilityModel:
         return min(1.0, diversity)
 
     def _calculate_consensus(self, predictions: List[MLVolatilityPrediction]) -> float:
-        """Расчет consensus среди моделей"""
+        """Calculate consensus among models"""
         if len(predictions) < 2:
             return 1.0
         
@@ -1480,7 +1480,7 @@ class EnsembleVolatilityModel:
         return 0.5
 
     def get_ensemble_summary(self) -> Dict[str, Any]:
-        """Получение summary ensemble модели"""
+        """Get ensemble model summary"""
         
         summary = {
             "n_models": len(self.models),
@@ -1501,7 +1501,7 @@ async def create_default_ensemble(
     include_har: bool = True,
     include_rf: bool = True
 ) -> EnsembleVolatilityModel:
-    """Создание default ensemble с популярными моделями"""
+    """Create default ensemble with popular models"""
     
     models = []
     
@@ -1522,7 +1522,7 @@ async def compare_models_performance(
     X_test: pd.DataFrame,
     y_test: pd.Series
 ) -> pd.DataFrame:
-    """Сравнение performance разных моделей"""
+    """Compare performance of different models"""
     
     results = []
     
@@ -1564,7 +1564,7 @@ async def compare_models_performance(
     
     return pd.DataFrame(results).sort_values('R²', ascending=False)
 
-# Export всех классов
+# Export all classes
 __all__ = [
     "BaseMLVolatilityModel",
     "LSTMVolatilityModel",

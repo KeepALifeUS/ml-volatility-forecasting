@@ -1,12 +1,12 @@
 """
-GARCH Models Family для Crypto Volatility Forecasting
+GARCH Models Family for Crypto Volatility Forecasting
 
-Реализация полной линейки GARCH моделей:
+Implementation of a full suite of GARCH models:
 - GARCH(1,1) - Standard GARCH
-- EGARCH - Exponential GARCH для asymmetric effects
-- GJR-GARCH - Threshold GARCH для leverage effects
-- FIGARCH - Fractionally Integrated GARCH для long memory
-- DCC-GARCH - Dynamic Conditional Correlation для multivariate
+- EGARCH - Exponential GARCH for asymmetric effects
+- GJR-GARCH - Threshold GARCH for leverage effects
+- FIGARCH - Fractionally Integrated GARCH for long memory
+- DCC-GARCH - Dynamic Conditional Correlation for multivariate
 
 Features:
 - Production-ready error handling
@@ -34,13 +34,13 @@ from sklearn.metrics import mean_squared_error, mean_absolute_error
 import optuna
 from numba import jit
 
-# Настройка логирования
+# Logging configuration
 logger = logging.getLogger(__name__)
 warnings.filterwarnings('ignore', category=UserWarning, module='arch')
 
 @dataclass
 class VolatilityForecast:
-    """Результат прогноза волатильности"""
+    """Volatility forecast result"""
     symbol: str
     timestamp: datetime
     forecast_horizon: int
@@ -54,7 +54,7 @@ class VolatilityForecast:
 
 @dataclass 
 class ModelPerformance:
-    """Метрики производительности модели"""
+    """Model performance metrics"""
     model_name: str
     symbol: str
     period: str
@@ -71,7 +71,7 @@ class ModelPerformance:
 
 class BaseGARCHModel(ABC):
     """
-    Базовый класс для всех GARCH моделей
+    Base class for all GARCH models
     """
     
     def __init__(
@@ -104,7 +104,7 @@ class BaseGARCHModel(ABC):
         update_freq: int = 252,
         **kwargs
     ) -> "BaseGARCHModel":
-        """Обучение модели с асинхронной поддержкой"""
+        """Train the model with async support"""
         pass
 
     @abstractmethod
@@ -114,7 +114,7 @@ class BaseGARCHModel(ABC):
         method: str = "simulation",
         confidence_levels: List[float] = None
     ) -> VolatilityForecast:
-        """Генерация прогноза волатильности"""
+        """Generate volatility forecast"""
         pass
 
     def calculate_qlike_loss(
@@ -122,7 +122,7 @@ class BaseGARCHModel(ABC):
         realized_var: np.ndarray, 
         forecast_var: np.ndarray
     ) -> float:
-        """QLIKE loss function для оценки прогнозов волатильности"""
+        """QLIKE loss function for evaluating volatility forecasts"""
         return np.mean(realized_var / forecast_var + np.log(forecast_var))
 
     def validate_model(
@@ -132,7 +132,7 @@ class BaseGARCHModel(ABC):
         validation_end: datetime,
         rolling_window: int = 252
     ) -> ModelPerformance:
-        """Валидация модели на out-of-sample данных"""
+        """Validate model on out-of-sample data"""
         val_returns = returns[validation_start:validation_end]
         predictions = []
         actuals = []
@@ -141,7 +141,7 @@ class BaseGARCHModel(ABC):
             train_data = val_returns.iloc[i-rolling_window:i]
             actual_vol = val_returns.iloc[i]
             
-            # Обучение на скользящем окне
+            # Train on rolling window
             temp_model = self._create_model()
             temp_fitted = temp_model.fit(train_data, disp="off")
             forecast = temp_fitted.forecast(horizon=1)
@@ -152,7 +152,7 @@ class BaseGARCHModel(ABC):
         predictions = np.array(predictions)
         actuals = np.array(actuals)
         
-        # Расчет метрик
+        # Calculate metrics
         mse = mean_squared_error(actuals, predictions)
         mae = mean_absolute_error(actuals, predictions)
         qlike = self.calculate_qlike_loss(actuals**2, predictions**2)
@@ -180,8 +180,8 @@ class GARCHModel(BaseGARCHModel):
     """
     Standard GARCH(1,1) Model
     
-    Классическая GARCH модель для прогнозирования волатильности.
-    Оптимальна для криптовалют с умеренной волатильностью.
+    Classic GARCH model for volatility forecasting.
+    Optimal for cryptocurrencies with moderate volatility.
     """
     
     def __init__(self, symbol: str, p: int = 1, q: int = 1, **kwargs):
@@ -190,7 +190,7 @@ class GARCHModel(BaseGARCHModel):
         self.q = q  # ARCH lag order
     
     def _create_model(self, returns: pd.Series = None):
-        """Создание GARCH модели"""
+        """Create GARCH model"""
         if self.mean_model == "Zero":
             mean_model = ZeroMean(returns)
         else:
@@ -205,24 +205,24 @@ class GARCHModel(BaseGARCHModel):
         **kwargs
     ) -> "GARCHModel":
         """
-        Асинхронная подгонка GARCH модели
+        Async GARCH model fitting
         """
         try:
             logger.info(f"🔄 Fitting {self.name} model for {self.symbol}...")
             
-            # Проверка данных
+            # Validate data
             if len(returns) < 100:
                 raise ValueError(f"Insufficient data: {len(returns)} observations")
             
-            # Подготовка данных
+            # Prepare data
             returns_clean = returns.dropna() * 100  # Convert to percentage
             
-            # Создание модели
+            # Create model
             mean_model = ZeroMean(returns_clean)
             mean_model.volatility = GARCH(p=self.p, q=self.q)
             mean_model.distribution = self._get_distribution()
             
-            # Асинхронная подгонка
+            # Async fitting
             loop = asyncio.get_event_loop()
             self.fitted_model = await loop.run_in_executor(
                 None, 
@@ -250,7 +250,7 @@ class GARCHModel(BaseGARCHModel):
         simulations: int = 1000
     ) -> VolatilityForecast:
         """
-        Генерация прогноза волатильности
+        Generate volatility forecast
         """
         if not self.fitted_model:
             raise ValueError("Model must be fitted before forecasting")
@@ -262,12 +262,12 @@ class GARCHModel(BaseGARCHModel):
             logger.info(f"📈 Forecasting volatility for {horizon} periods...")
             
             if method == "analytical":
-                # Аналитический прогноз
+                # Analytical forecast
                 forecast = self.fitted_model.forecast(horizon=horizon)
                 variance_forecast = forecast.variance.iloc[-1].values / 10000  # Convert back from %
                 volatility_forecast = np.sqrt(variance_forecast)
                 
-                # Confidence intervals (простая аппроксимация)
+                # Confidence intervals (simple approximation)
                 std_err = np.sqrt(variance_forecast * 2 / len(self.fitted_model.resid))
                 confidence_intervals = {}
                 
@@ -276,7 +276,7 @@ class GARCHModel(BaseGARCHModel):
                     lower = volatility_forecast - z_score * std_err
                     upper = volatility_forecast + z_score * std_err
                     confidence_intervals[1-alpha] = (
-                        np.maximum(lower, 0),  # Vol не может быть отрицательной
+                        np.maximum(lower, 0),  # Vol cannot be negative
                         upper
                     )
             
@@ -288,22 +288,22 @@ class GARCHModel(BaseGARCHModel):
                     simulations=simulations
                 )
                 
-                # Извлечение симуляций
+                # Extract simulations
                 variance_sims = forecasts.simulations.variances[-simulations:] / 10000
                 volatility_sims = np.sqrt(variance_sims)
                 
-                # Средний прогноз
+                # Mean forecast
                 variance_forecast = np.mean(variance_sims, axis=0)
                 volatility_forecast = np.sqrt(variance_forecast)
                 
-                # Confidence intervals из симуляций
+                # Confidence intervals from simulations
                 confidence_intervals = {}
                 for alpha in confidence_levels:
                     lower = np.percentile(volatility_sims, alpha/2*100, axis=0)
                     upper = np.percentile(volatility_sims, (1-alpha/2)*100, axis=0)
                     confidence_intervals[1-alpha] = (lower, upper)
             
-            # Оценка качества прогноза
+            # Assess forecast quality
             forecast_quality = self._assess_forecast_quality(
                 volatility_forecast, confidence_intervals
             )
@@ -337,7 +337,7 @@ class GARCHModel(BaseGARCHModel):
             raise
 
     def _get_distribution(self):
-        """Получить распределение для модели"""
+        """Get distribution for the model"""
         from arch.univariate import Normal, StudentsT, SkewStudent
         
         dist_map = {
@@ -352,16 +352,16 @@ class GARCHModel(BaseGARCHModel):
         forecast: np.ndarray,
         confidence_intervals: Dict[float, Tuple[np.ndarray, np.ndarray]]
     ) -> Dict[str, float]:
-        """Оценка качества прогноза"""
+        """Assess forecast quality"""
         quality_metrics = {}
         
-        # Confidence interval width (меньше = лучше)
+        # Confidence interval width (smaller = better)
         if 0.95 in confidence_intervals:
             ci_95 = confidence_intervals[0.95]
             avg_width = np.mean(ci_95[1] - ci_95[0])
             quality_metrics["ci_width_95"] = avg_width
         
-        # Forecast stability (меньше изменчивость = лучше)
+        # Forecast stability (less variability = better)
         if len(forecast) > 1:
             stability = np.std(np.diff(forecast)) / np.mean(forecast)
             quality_metrics["forecast_stability"] = stability
@@ -378,9 +378,9 @@ class EGARCHModel(BaseGARCHModel):
     """
     Exponential GARCH (EGARCH) Model
     
-    Модель учитывающая asymmetric effects (leverage effect):
-    - Негативные новости увеличивают волатильность больше, чем позитивные
-    - Особенно важно для криптовалют с высокой волатильностью
+    Model accounting for asymmetric effects (leverage effect):
+    - Negative news increases volatility more than positive news
+    - Especially important for cryptocurrencies with high volatility
     """
     
     def __init__(self, symbol: str, p: int = 1, o: int = 1, q: int = 1, **kwargs):
@@ -395,13 +395,13 @@ class EGARCHModel(BaseGARCHModel):
         update_freq: int = 252,
         **kwargs
     ) -> "EGARCHModel":
-        """Обучение EGARCH модели"""
+        """Train EGARCH model"""
         try:
             logger.info(f"🔄 Fitting {self.name} model for {self.symbol}...")
             
             returns_clean = returns.dropna() * 100
             
-            # EGARCH модель
+            # EGARCH model
             mean_model = ZeroMean(returns_clean)
             mean_model.volatility = EGARCH(p=self.p, o=self.o, q=self.q)
             mean_model.distribution = self._get_distribution()
@@ -429,12 +429,12 @@ class EGARCHModel(BaseGARCHModel):
         confidence_levels: List[float] = None,
         simulations: int = 1000
     ) -> VolatilityForecast:
-        """Прогноз с учетом асимметрии"""
-        # Аналогично GARCH, но с учетом asymmetric effects
+        """Forecast accounting for asymmetry"""
+        # Similar to GARCH, but accounting for asymmetric effects
         return await self._forecast_base(horizon, method, confidence_levels, simulations)
 
     def _get_distribution(self):
-        """EGARCH часто лучше работает с Student-t distribution"""
+        """EGARCH often works better with Student-t distribution"""
         from arch.univariate import Normal, StudentsT, SkewStudent
         
         dist_map = {
@@ -445,7 +445,7 @@ class EGARCHModel(BaseGARCHModel):
         return dist_map.get(self.dist, StudentsT())  # Default to Student-t
 
     async def _forecast_base(self, horizon, method, confidence_levels, simulations):
-        """Базовая реализация прогноза (общая для EGARCH/GJR-GARCH)"""
+        """Base forecast implementation (shared by EGARCH/GJR-GARCH)"""
         if not self.fitted_model:
             raise ValueError("Model must be fitted before forecasting")
         
@@ -485,9 +485,9 @@ class GJRGARCHModel(BaseGARCHModel):
     """
     Glosten-Jagannathan-Runkle GARCH (GJR-GARCH) Model
     
-    Threshold GARCH модель для leverage effects:
-    - Различная реакция на позитивные и негативные новости
-    - Пороговая функция для asymmetric volatility
+    Threshold GARCH model for leverage effects:
+    - Different response to positive and negative news
+    - Threshold function for asymmetric volatility
     """
     
     def __init__(self, symbol: str, p: int = 1, o: int = 1, q: int = 1, **kwargs):
@@ -497,16 +497,16 @@ class GJRGARCHModel(BaseGARCHModel):
         self.q = q
 
     async def fit(self, returns: pd.Series, update_freq: int = 252, **kwargs) -> "GJRGARCHModel":
-        """Обучение GJR-GARCH модели"""
+        """Train GJR-GARCH model"""
         try:
             logger.info(f"🔄 Fitting {self.name} model for {self.symbol}...")
             
             returns_clean = returns.dropna() * 100
             
-            # Используем общую GARCH с power=2 для GJR эффектов
+            # Use standard GARCH with power=2 for GJR effects
             mean_model = ZeroMean(returns_clean)
-            # В библиотеке arch можно использовать параметр o для threshold effects
-            mean_model.volatility = GARCH(p=self.p, q=self.q) # FIXME: нужна специальная реализация GJR
+            # In the arch library, the o parameter can be used for threshold effects
+            mean_model.volatility = GARCH(p=self.p, q=self.q) # FIXME: needs a dedicated GJR implementation
             mean_model.distribution = self._get_distribution()
             
             loop = asyncio.get_event_loop()
@@ -527,16 +527,16 @@ class GJRGARCHModel(BaseGARCHModel):
 
     async def forecast(self, horizon: int = 1, method: str = "simulation", 
                       confidence_levels: List[float] = None, simulations: int = 1000) -> VolatilityForecast:
-        """Прогноз с threshold effects"""
+        """Forecast with threshold effects"""
         return await self._forecast_base(horizon, method, confidence_levels, simulations)
 
     def _get_distribution(self):
         from arch.univariate import StudentsT
-        return StudentsT()  # GJR-GARCH лучше работает с heavy-tailed распределениями
+        return StudentsT()  # GJR-GARCH works better with heavy-tailed distributions
 
     async def _forecast_base(self, horizon, method, confidence_levels, simulations):
-        """Базовая реализация прогноза"""
-        # Копия реализации из EGARCHModel
+        """Base forecast implementation"""
+        # Copy of implementation from EGARCHModel
         if not self.fitted_model:
             raise ValueError("Model must be fitted before forecasting")
         
@@ -575,10 +575,10 @@ class FIGARCHModel(BaseGARCHModel):
     """
     Fractionally Integrated GARCH (FIGARCH) Model
     
-    Модель для long memory в волатильности:
-    - Долговременная зависимость в волатильности
-    - Фрактальная интеграция для crypto markets
-    - Особенно эффективна для Bitcoin и крупных альткоинов
+    Model for long memory in volatility:
+    - Long-range dependence in volatility
+    - Fractional integration for crypto markets
+    - Especially effective for Bitcoin and major altcoins
     """
     
     def __init__(self, symbol: str, p: int = 1, q: int = 1, **kwargs):
@@ -587,7 +587,7 @@ class FIGARCHModel(BaseGARCHModel):
         self.q = q
 
     async def fit(self, returns: pd.Series, update_freq: int = 252, **kwargs) -> "FIGARCHModel":
-        """Обучение FIGARCH модели"""
+        """Train FIGARCH model"""
         try:
             logger.info(f"🔄 Fitting {self.name} model for {self.symbol}...")
             
@@ -615,15 +615,15 @@ class FIGARCHModel(BaseGARCHModel):
 
     async def forecast(self, horizon: int = 1, method: str = "simulation",
                       confidence_levels: List[float] = None, simulations: int = 1000) -> VolatilityForecast:
-        """Прогноз с long memory effects"""
+        """Forecast with long memory effects"""
         return await self._forecast_base(horizon, method, confidence_levels, simulations)
 
     def _get_distribution(self):
         from arch.univariate import Normal
-        return Normal()  # FIGARCH обычно с Normal distribution
+        return Normal()  # FIGARCH typically with Normal distribution
 
     async def _forecast_base(self, horizon, method, confidence_levels, simulations):
-        """FIGARCH прогноз с учетом long memory"""
+        """FIGARCH forecast accounting for long memory"""
         if not self.fitted_model:
             raise ValueError("Model must be fitted before forecasting")
         
@@ -634,9 +634,9 @@ class FIGARCHModel(BaseGARCHModel):
         variance_forecast = forecast.variance.iloc[-1].values / 10000
         volatility_forecast = np.sqrt(variance_forecast)
         
-        # FIGARCH имеет более широкие confidence intervals из-за long memory
+        # FIGARCH has wider confidence intervals due to long memory
         confidence_intervals = {}
-        std_err = np.sqrt(variance_forecast * 3 / len(self.fitted_model.resid))  # Увеличенная неопределенность
+        std_err = np.sqrt(variance_forecast * 3 / len(self.fitted_model.resid))  # Increased uncertainty
         
         for alpha in confidence_levels:
             z_score = stats.norm.ppf(1 - alpha/2)
@@ -645,7 +645,7 @@ class FIGARCHModel(BaseGARCHModel):
             confidence_intervals[1-alpha] = (lower, upper)
         
         forecast_quality = self._assess_forecast_quality(volatility_forecast, confidence_intervals)
-        # Добавляем метрику long memory
+        # Add long memory metric
         forecast_quality["long_memory_strength"] = getattr(self.fitted_model, 'd', 0.5)
         
         return VolatilityForecast(
@@ -665,8 +665,8 @@ class DCCGARCHModel:
     """
     Dynamic Conditional Correlation GARCH (DCC-GARCH) Model
     
-    Multivariate GARCH для корреляционного анализа:
-    - Динамические корреляции между криптовалютами
+    Multivariate GARCH for correlation analysis:
+    - Dynamic correlations between cryptocurrencies
     - Portfolio risk assessment
     - Cross-asset volatility spillovers
     """
@@ -682,15 +682,15 @@ class DCCGARCHModel:
 
     async def fit(self, returns_matrix: pd.DataFrame, **kwargs) -> "DCCGARCHModel":
         """
-        Обучение DCC-GARCH модели
-        
+        Train DCC-GARCH model
+
         Args:
-            returns_matrix: DataFrame с доходностями по символам
+            returns_matrix: DataFrame with returns per symbol
         """
         try:
             logger.info(f"🔄 Fitting {self.name} model for {len(self.symbols)} assets...")
             
-            # Шаг 1: Обучение индивидуальных GARCH моделей
+            # Step 1: Train individual GARCH models
             for symbol in self.symbols:
                 if symbol not in returns_matrix.columns:
                     raise ValueError(f"Symbol {symbol} not found in returns data")
@@ -702,8 +702,8 @@ class DCCGARCHModel:
                 
                 logger.info(f"   ✅ Fitted individual GARCH for {symbol}")
             
-            # Шаг 2: DCC estimation (упрощенная реализация)
-            # В реальной реализации используется специальная DCC процедура
+            # Step 2: DCC estimation (simplified implementation)
+            # In a real implementation, a dedicated DCC procedure is used
             residuals_matrix = pd.DataFrame()
             
             for symbol in self.symbols:
@@ -712,7 +712,7 @@ class DCCGARCHModel:
                     std_residuals = model.fitted_model.std_resid
                     residuals_matrix[symbol] = std_residuals
             
-            # Динамические корреляции (простая экспоненциальная схема)
+            # Dynamic correlations (simple exponential scheme)
             self.correlation_dynamics = self._estimate_dynamic_correlations(residuals_matrix)
             
             self.last_fit_time = datetime.now()
@@ -725,7 +725,7 @@ class DCCGARCHModel:
             raise
 
     def _estimate_dynamic_correlations(self, residuals: pd.DataFrame) -> pd.DataFrame:
-        """Оценка динамических корреляций (simplified DCC)"""
+        """Estimate dynamic correlations (simplified DCC)"""
         # Exponentially weighted correlations
         correlations = residuals.ewm(span=30).corr().unstack()
         return correlations
@@ -736,23 +736,23 @@ class DCCGARCHModel:
         horizon: int = 1
     ) -> Dict[str, Any]:
         """
-        Прогноз портфельной волатильности
-        
+        Forecast portfolio volatility
+
         Args:
-            weights: Веса активов в портфеле
-            horizon: Горизонт прогноза
+            weights: Asset weights in the portfolio
+            horizon: Forecast horizon
         """
         if not all(symbol in self.models for symbol in weights.keys()):
             raise ValueError("All portfolio symbols must be fitted in DCC model")
         
-        # Прогнозы индивидуальных волатильностей
+        # Individual volatility forecasts
         individual_forecasts = {}
         for symbol, weight in weights.items():
             if weight > 0:
                 forecast = await self.models[symbol].forecast(horizon=horizon)
                 individual_forecasts[symbol] = forecast.volatility_forecast[0]
         
-        # Portfolio volatility с учетом корреляций
+        # Portfolio volatility accounting for correlations
         portfolio_variance = 0
         symbols_list = list(weights.keys())
         
@@ -766,7 +766,7 @@ class DCCGARCHModel:
                 if i == j:
                     correlation = 1.0
                 else:
-                    # Последняя корреляция из динамической модели
+                    # Latest correlation from the dynamic model
                     try:
                         correlation = self.correlation_dynamics.iloc[-1][(symbol1, symbol2)]
                     except:
@@ -790,7 +790,7 @@ class DCCGARCHModel:
         return result
 
     def _get_current_correlations(self) -> Dict[Tuple[str, str], float]:
-        """Получить текущую корреляционную матрицу"""
+        """Get current correlation matrix"""
         if self.correlation_dynamics is None or len(self.correlation_dynamics) == 0:
             return {}
         
@@ -807,7 +807,7 @@ class DCCGARCHModel:
         individual_vols: Dict[str, float],
         portfolio_vol: float
     ) -> float:
-        """Расчет коэффициента диверсификации"""
+        """Calculate diversification ratio"""
         weighted_avg_vol = sum(weights[s] * vol for s, vol in individual_vols.items())
         if portfolio_vol > 0:
             return weighted_avg_vol / portfolio_vol
@@ -815,11 +815,11 @@ class DCCGARCHModel:
 
 class GARCHModelSelector:
     """
-    Автоматический выбор лучшей GARCH модели для конкретного актива
-    
+    Automatic selection of the best GARCH model for a specific asset
+
     Features:
-    - Bayesian optimization для гиперпараметров
-    - Cross-validation для выбора модели
+    - Bayesian optimization for hyperparameters
+    - Cross-validation for model selection
     - Performance monitoring
     - Automatic model updates
     """
@@ -845,16 +845,16 @@ class GARCHModelSelector:
         scoring_method: str = "aic"
     ) -> BaseGARCHModel:
         """
-        Выбор лучшей модели на основе валидации
-        
+        Select best model based on validation
+
         Args:
-            returns: Временной ряд доходностей
-            validation_split: Доля данных для обучения
-            scoring_method: Метод оценки ("aic", "bic", "qlike", "mse")
+            returns: Returns time series
+            validation_split: Training data fraction
+            scoring_method: Scoring method ("aic", "bic", "qlike", "mse")
         """
         logger.info(f"🔍 Selecting best GARCH model for {self.symbol}...")
         
-        # Разделение данных
+        # Split data
         split_point = int(len(returns) * validation_split)
         train_returns = returns.iloc[:split_point]
         val_returns = returns.iloc[split_point:]
@@ -864,22 +864,22 @@ class GARCHModelSelector:
         
         model_performances = {}
         
-        # Обучение и валидация каждой модели
+        # Train and validate each model
         for model_name, ModelClass in self.models.items():
             try:
                 logger.info(f"   📊 Testing {model_name}...")
                 
-                # Создание и обучение модели
+                # Create and train model
                 model = ModelClass(self.symbol)
                 await model.fit(train_returns)
                 
-                # Валидация модели
-                if len(val_returns) > 30:  # Достаточно данных для валидации
+                # Validate model
+                if len(val_returns) > 30:  # Enough data for validation
                     performance = model.validate_model(
                         returns, val_start, val_end, rolling_window=min(252, len(train_returns)//2)
                     )
                 else:
-                    # Используем in-sample метрики
+                    # Use in-sample metrics
                     performance = ModelPerformance(
                         model_name=model_name,
                         symbol=self.symbol,
@@ -898,7 +898,7 @@ class GARCHModelSelector:
                 self.fitted_models[model_name] = model
                 model_performances[model_name] = performance
                 
-                # Определение score на основе метода
+                # Determine score based on method
                 if scoring_method == "aic":
                     score = performance.aic
                     minimize = True
@@ -926,7 +926,7 @@ class GARCHModelSelector:
         if not self.model_scores:
             raise ValueError("No models could be fitted successfully")
         
-        # Выбор лучшей модели
+        # Select best model
         if minimize:
             best_model_name = min(self.model_scores.keys(), key=lambda k: self.model_scores[k])
         else:
@@ -937,7 +937,7 @@ class GARCHModelSelector:
         
         logger.info(f"🏆 Best model selected: {best_model_name} ({scoring_method}={best_score:.4f})")
         
-        # Сохранение результатов
+        # Save results
         self.selection_results = {
             "best_model": best_model_name,
             "best_score": best_score,
@@ -957,18 +957,18 @@ class GARCHModelSelector:
         n_trials: int = 50
     ) -> Dict[str, Any]:
         """
-        Оптимизация гиперпараметров с использованием Optuna
-        
+        Hyperparameter optimization using Optuna
+
         Args:
-            returns: Временной ряд доходностей
-            model_type: Тип модели для оптимизации
-            n_trials: Количество попыток оптимизации
+            returns: Returns time series
+            model_type: Model type to optimize
+            n_trials: Number of optimization trials
         """
         logger.info(f"🎯 Optimizing {model_type} hyperparameters for {self.symbol}...")
         
         def objective(trial):
             try:
-                # Предложение параметров
+                # Suggest parameters
                 if model_type == "GARCH":
                     p = trial.suggest_int("p", 1, 3)
                     q = trial.suggest_int("q", 1, 3)
@@ -983,7 +983,7 @@ class GARCHModelSelector:
                     q = trial.suggest_int("q", 1, 2)
                     model = self.models[model_type](self.symbol, p=p, q=q)
                 
-                # Синхронная подгонка для optuna
+                # Synchronous fitting for Optuna
                 train_data = returns.dropna() * 100
                 mean_model = ZeroMean(train_data)
                 
@@ -995,12 +995,12 @@ class GARCHModelSelector:
                     mean_model.volatility = GARCH(p=1, q=1)  # Fallback
                 
                 fitted = mean_model.fit(disp="off")
-                return fitted.aic  # Минимизируем AIC
+                return fitted.aic  # Minimize AIC
                 
             except Exception:
                 return float('inf')  # Penalty for failed fits
         
-        # Оптимизация
+        # Optimization
         study = optuna.create_study(direction="minimize")
         study.optimize(objective, n_trials=n_trials, show_progress_bar=False)
         
@@ -1010,7 +1010,7 @@ class GARCHModelSelector:
         logger.info(f"🏆 Best {model_type} parameters: {best_params}")
         logger.info(f"   Best AIC: {best_value:.4f}")
         
-        # Создание и обучение оптимальной модели
+        # Create and train optimal model
         if model_type == "GARCH":
             optimal_model = GARCHModel(self.symbol, **best_params)
         elif model_type == "EGARCH":
@@ -1036,7 +1036,7 @@ class GARCHModelSelector:
         return optimization_results
 
     def get_model_comparison(self) -> pd.DataFrame:
-        """Сравнение всех обученных моделей"""
+        """Compare all trained models"""
         if not self.fitted_models:
             return pd.DataFrame()
         
@@ -1056,12 +1056,12 @@ class GARCHModelSelector:
                 comparison_data.append(row)
         
         comparison_df = pd.DataFrame(comparison_data)
-        comparison_df = comparison_df.sort_values("AIC")  # Лучшие модели сверху
+        comparison_df = comparison_df.sort_values("AIC")  # Best models on top
         
         return comparison_df
 
     def summary_report(self) -> str:
-        """Генерация отчета по выбору модели"""
+        """Generate model selection report"""
         if not self.best_model:
             return "No model selection performed yet."
         
@@ -1085,7 +1085,7 @@ Recommendations:
         
         return report
 
-# Утилитарные функции для быстрого использования
+# Utility functions for quick usage
 
 async def quick_volatility_forecast(
     symbol: str,
@@ -1094,13 +1094,13 @@ async def quick_volatility_forecast(
     auto_select: bool = True
 ) -> VolatilityForecast:
     """
-    Быстрое создание прогноза волатильности
-    
+    Quick volatility forecast creation
+
     Args:
-        symbol: Символ актива
-        returns: Доходности
-        horizon: Горизонт прогноза
-        auto_select: Автоматический выбор модели
+        symbol: Asset symbol
+        returns: Returns
+        horizon: Forecast horizon
+        auto_select: Automatic model selection
     """
     if auto_select:
         selector = GARCHModelSelector(symbol)
@@ -1116,11 +1116,11 @@ def create_garch_ensemble(
     model_types: List[str] = None
 ) -> List[BaseGARCHModel]:
     """
-    Создание ансамбля GARCH моделей
-    
+    Create a GARCH model ensemble
+
     Args:
-        symbol: Символ актива
-        model_types: Список типов моделей
+        symbol: Asset symbol
+        model_types: List of model types
     """
     if model_types is None:
         model_types = ["GARCH", "EGARCH", "GJR-GARCH"]
@@ -1140,7 +1140,7 @@ def create_garch_ensemble(
     
     return models
 
-# Export всех классов
+# Export all classes
 __all__ = [
     "BaseGARCHModel",
     "GARCHModel", 

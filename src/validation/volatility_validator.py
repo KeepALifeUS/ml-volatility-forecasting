@@ -1,8 +1,8 @@
 """
 Volatility Model Validation Framework
 
-Реализация comprehensive validation system для volatility models:
-- Out-of-sample testing с time series splits
+Implementation of comprehensive validation system for volatility models:
+- Out-of-sample testing with time series splits
 - Rolling window validation
 - Model comparison (Diebold-Mariano test)
 - Loss functions (QLIKE, MSE, MAE, Hit Rate)
@@ -13,7 +13,7 @@ Volatility Model Validation Framework
 Features:
 - Automated validation pipelines
 - Production validation monitoring
-- A/B testing framework для models
+- A/B testing framework for models
 - Performance degradation detection
 - Regulatory compliance validation
 """
@@ -35,12 +35,12 @@ from sklearn.model_selection import TimeSeriesSplit
 import optuna
 from numba import jit
 
-# Настройка логирования
+# Logging configuration
 logger = logging.getLogger(__name__)
 warnings.filterwarnings('ignore', category=RuntimeWarning)
 
 class ValidationMethod(Enum):
-    """Методы валидации"""
+    """Validation methods"""
     OUT_OF_SAMPLE = "out_of_sample"
     ROLLING_WINDOW = "rolling_window"
     EXPANDING_WINDOW = "expanding_window"
@@ -48,7 +48,7 @@ class ValidationMethod(Enum):
     BOOTSTRAP = "bootstrap"
 
 class LossFunctionType(Enum):
-    """Типы loss functions для volatility"""
+    """Loss function types for volatility"""
     MSE = "mse"
     MAE = "mae"
     QLIKE = "qlike"
@@ -57,7 +57,7 @@ class LossFunctionType(Enum):
     DIRECTIONAL_ACCURACY = "directional_accuracy"
 
 class TestType(Enum):
-    """Типы статистических тестов"""
+    """Statistical test types"""
     DIEBOLD_MARIANO = "diebold_mariano"
     KUPIEC = "kupiec"
     CHRISTOFFERSEN = "christoffersen"
@@ -66,7 +66,7 @@ class TestType(Enum):
 
 @dataclass
 class ValidationResult:
-    """Результат валидации модели"""
+    """Model validation result"""
     model_name: str
     symbol: str
     validation_method: ValidationMethod
@@ -102,7 +102,7 @@ class ValidationResult:
 
 @dataclass
 class ModelComparison:
-    """Результат сравнения моделей"""
+    """Model comparison result"""
     models: List[str]
     symbol: str
     comparison_period: Tuple[datetime, datetime]
@@ -125,7 +125,7 @@ class ModelComparison:
 
 @dataclass
 class BacktestResult:
-    """Результат VaR backtesting"""
+    """VaR backtesting result"""
     model_name: str
     symbol: str
     confidence_level: float
@@ -197,18 +197,18 @@ def _calculate_hit_rate_numba(y_true: np.ndarray, y_pred: np.ndarray) -> float:
     return correct_directions / (n - 1) if n > 1 else 0.0
 
 class BaseLossFunction(ABC):
-    """Базовый класс для loss functions"""
+    """Base class for loss functions"""
     
     def __init__(self, name: str):
         self.name = name
     
     @abstractmethod
     def calculate(self, y_true: np.ndarray, y_pred: np.ndarray) -> float:
-        """Расчет loss function"""
+        """Calculate loss function"""
         pass
 
 class QLIKELoss(BaseLossFunction):
-    """QLIKE Loss Function для volatility forecasting"""
+    """QLIKE Loss Function for volatility forecasting"""
     
     def __init__(self):
         super().__init__("QLIKE")
@@ -241,8 +241,8 @@ class VolatilityValidator:
     """
     Comprehensive Volatility Model Validator
     
-    Поддерживает multiple validation методы и statistical tests
-    для comprehensive model evaluation в production environment.
+    Supports multiple validation methods and statistical tests
+    for comprehensive model evaluation in production environment.
     """
     
     def __init__(self, symbol: str):
@@ -263,7 +263,7 @@ class VolatilityValidator:
 
     async def validate_model(
         self,
-        model: Any,  # Volatility model с predict методом
+        model: Any,  # Volatility model with predict method
         X: pd.DataFrame,
         y: pd.Series,
         method: ValidationMethod = ValidationMethod.OUT_OF_SAMPLE,
@@ -328,7 +328,7 @@ class VolatilityValidator:
     ) -> ValidationResult:
         """Out-of-sample validation"""
         
-        # Time-series split (не random!)
+        # Time-series split (not random!)
         split_index = int(len(X) * (1 - test_size))
         
         X_train, X_test = X.iloc[:split_index], X.iloc[split_index:]
@@ -337,7 +337,7 @@ class VolatilityValidator:
         if len(y_test) < 30:
             raise ValueError("Insufficient test data for validation")
         
-        # Model fitting (если требуется)
+        # Model fitting (if required)
         if hasattr(model, 'fit') and not getattr(model, 'is_fitted', False):
             await model.fit(X_train, y_train)
         
@@ -440,7 +440,7 @@ class VolatilityValidator:
             y_actual = y.iloc[i]
             
             try:
-                # Retrain model (simplified - в production может быть incremental)
+                # Retrain model (simplified - in production could be incremental)
                 if hasattr(model, 'fit'):
                     await model.fit(X_train, y_train)
                 
@@ -537,7 +537,7 @@ class VolatilityValidator:
             y_actual = y.iloc[i]
             
             try:
-                # Retrain model с expanding dataset
+                # Retrain model with expanding dataset
                 if hasattr(model, 'fit'):
                     await model.fit(X_train, y_train)
                 
@@ -722,7 +722,7 @@ class VolatilityValidator:
         except Exception as e:
             logger.debug(f"Jarque-Bera test failed: {e}")
         
-        # Autocorrelation test на residuals
+        # Autocorrelation test on residuals
         try:
             from statsmodels.stats.diagnostic import acorr_ljungbox
             
@@ -1012,7 +1012,7 @@ class VolatilityValidator:
             n = len(loss_diff)
             variance = np.var(loss_diff, ddof=1)
             
-            # Simplified variance calculation (для full implementation нужен Newey-West)
+            # Simplified variance calculation (for full implementation need Newey-West)
             dm_stat = mean_diff / np.sqrt(variance / n) if variance > 0 else 0
             
             # P-value (two-tailed test)
@@ -1041,7 +1041,7 @@ class VolatilityValidator:
         """Simplified Model Confidence Set analysis"""
         
         try:
-            # Extract loss series для каждой модели
+            # Extract loss series for each model
             model_losses = {}
             
             for result in validation_results:
@@ -1233,7 +1233,7 @@ class VaRBacktester:
     """
     VaR Backtesting Framework
     
-    Implements regulatory-compliant VaR backtesting с Kupiec и Christoffersen tests.
+    Implements regulatory-compliant VaR backtesting with Kupiec and Christoffersen tests.
     """
     
     def __init__(self, symbol: str):
@@ -1378,7 +1378,7 @@ class VaRBacktester:
         """Christoffersen independence test"""
         
         try:
-            # Transition matrix для violations
+            # Transition matrix for violations
             n = len(violations)
             if n < 2:
                 return {"error": "Insufficient data for independence test"}
@@ -1469,7 +1469,7 @@ class VaRBacktester:
     ) -> str:
         """Determine Basel traffic light status"""
         
-        # Basel III thresholds для 99% VaR over 250 days
+        # Basel III thresholds for 99% VaR over 250 days
         if expected_rate == 0.01:  # 99% confidence level
             if violations <= 4:
                 return "green"
@@ -1540,7 +1540,7 @@ Violation Clustering:
         
         return report
 
-# Export всех классов
+# Export all classes
 __all__ = [
     "ValidationMethod",
     "LossFunctionType", 
