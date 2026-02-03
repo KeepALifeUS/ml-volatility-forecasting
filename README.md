@@ -154,3 +154,7 @@ export REDIS_URL="redis://localhost:6379"
 ## License
 
 MIT License — see [LICENSE](LICENSE) for details.
+
+## Support
+
+For questions and support, please open an issue on GitHub.
